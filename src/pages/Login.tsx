@@ -52,7 +52,7 @@ export default function Login() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName } },
+          options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
         setSuccess("Check your email to confirm your account!");
