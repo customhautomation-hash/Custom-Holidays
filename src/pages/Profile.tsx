@@ -19,17 +19,17 @@ function getInitials(name?: string | null, email?: string | null): string {
 }
 
 function Toggle({ value, onChange, dark }: { value: boolean; onChange: () => void; dark: boolean }) {
-  const BG = dark ? "#241418" : "#F3EAEA";
+  const BG = dark ? "#0C2C32" : "#F3EAEA";
   const SHADOW_IN = dark
-    ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027"
+    ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A"
     : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
   const SHADOW_KNOB = dark
-    ? "2px 2px 5px #120A0C, -2px -2px 5px #352027"
+    ? "2px 2px 5px #061A1E, -2px -2px 5px #16434A"
     : "2px 2px 5px #D9C6C8, -2px -2px 5px #FFFFFF";
   return (
     <div onClick={onChange} style={{
       width: 44, height: 24, borderRadius: 99,
-      background: value ? "#9B2C3F" : BG,
+      background: value ? "#13585B" : BG,
       boxShadow: value ? "none" : SHADOW_IN,
       position: "relative", cursor: "pointer", transition: "all 0.3s", flexShrink: 0,
     }}>
@@ -48,16 +48,16 @@ export default function Profile() {
   const { user, profile } = useAuth();
   const { dark, toggle: toggleDark } = useDarkMode();
 
-  const BG = dark ? "#241418" : "#F3EAEA";
+  const BG = dark ? "#0C2C32" : "#F3EAEA";
   const SHADOW_OUT = dark
-    ? "5px 5px 12px #120A0C, -5px -5px 12px #352027"
+    ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A"
     : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
   const SHADOW_IN = dark
-    ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027"
+    ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A"
     : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
-  const TEXT_MAIN = dark ? "#F0D8DC" : "#3A2428";
-  const TEXT_MUTED = dark ? "#A07A82" : "#9A8285";
-  const BORDER = dark ? "#3A232B" : "#E8DADB";
+  const TEXT_MAIN = dark ? "#E6EFEC" : "#1A2324";
+  const TEXT_MUTED = dark ? "#8FA6A3" : "#5B6766";
+  const BORDER = dark ? "#1E3E44" : "#E8DADB";
 
   // Pre-fill from profile
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
@@ -117,7 +117,7 @@ export default function Profile() {
   }
 
   function Row({
-    icon: Icon, label, sublabel, right, onClick, color = "#B23A4E",
+    icon: Icon, label, sublabel, right, onClick, color = "#1F6F72",
   }: {
     icon: React.ElementType; label: string; sublabel?: string;
     right?: React.ReactNode; onClick?: () => void; color?: string;
@@ -185,7 +185,7 @@ export default function Profile() {
             <div style={{ position: "relative" }}>
               <div style={{
                 width: 80, height: 80, borderRadius: 22,
-                background: "#9B2C3F",
+                background: "#13585B",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 28, fontWeight: 600, color: "#fff",
                 boxShadow: SHADOW_OUT, letterSpacing: 1,
@@ -197,7 +197,7 @@ export default function Profile() {
                 width: 28, height: 28, borderRadius: "50%",
                 background: BG, boxShadow: SHADOW_OUT, border: "none",
                 cursor: "pointer", display: "flex", alignItems: "center",
-                justifyContent: "center", color: "#B23A4E",
+                justifyContent: "center", color: "#1F6F72",
               }}>
                 <Camera style={{ width: 13, height: 13 }} />
               </button>
@@ -209,7 +209,7 @@ export default function Profile() {
               </p>
               <span style={{
                 display: "inline-block", marginTop: 6, fontSize: 11, fontWeight: 600,
-                color: "#B23A4E", background: "rgba(178,58,78,0.12)",
+                color: "#1F6F72", background: "rgba(20,100,110,0.12)",
                 borderRadius: 99, padding: "3px 12px",
               }}>
                 {displayRole}
@@ -252,7 +252,7 @@ export default function Profile() {
             disabled={saving || !fullName.trim()}
             style={{
               width: "100%", padding: 11, borderRadius: 12, border: "none",
-              background: saving || !fullName.trim() ? BG : "#9B2C3F",
+              background: saving || !fullName.trim() ? BG : "#13585B",
               boxShadow: saving || !fullName.trim() ? SHADOW_OUT : "none",
               color: saving || !fullName.trim() ? TEXT_MUTED : "#fff",
               fontSize: 13, fontWeight: 600,
@@ -276,7 +276,7 @@ export default function Profile() {
             icon={dark ? Moon : Sun}
             label="Dark Mode"
             sublabel={dark ? "Currently on" : "Currently off"}
-            color={dark ? "#B23A4E" : "#E0AA5A"}
+            color={dark ? "#1F6F72" : "#E0AA5A"}
             right={<Toggle value={dark} onChange={toggleDark} dark={dark} />}
           />
           <Row
@@ -305,9 +305,9 @@ export default function Profile() {
             icon={Shield}
             label="Role"
             sublabel="Contact admin to change your role"
-            color="#9B2C3F"
+            color="#13585B"
             right={
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#B23A4E", background: "rgba(178,58,78,0.12)", borderRadius: 99, padding: "3px 10px" }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#1F6F72", background: "rgba(20,100,110,0.12)", borderRadius: 99, padding: "3px 10px" }}>
                 {displayRole}
               </span>
             }

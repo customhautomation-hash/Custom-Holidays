@@ -15,9 +15,11 @@ export default {
     extend: {
       fontFamily: {
         sans: ["DM Sans", "system-ui", "sans-serif"],
-        serif: ["Newsreader", "DM Serif Display", "Georgia", "serif"],
+        serif: ['Playfair Display', 'Newsreader', "DM Serif Display", "Georgia", "serif"],
       },
       colors: {
+        teal: { 50: "#EEF5F4", 100: "#D9E9E7", 200: "#B5D3D0", 300: "#86B5B2", 400: "#4F8F8F", 500: "#1F6F72", 600: "#13585B", 700: "#0F4A4D", 800: "#0B3B3D", 900: "#072A2C" },
+        gold: { 50: "#FBF6EA", 100: "#F6EEDB", 200: "#EEDCAE", 300: "#E3C77A", 400: "#D4AF5A", 500: "#B8913E", 600: "#9A772F", 700: "#8A6A24" },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

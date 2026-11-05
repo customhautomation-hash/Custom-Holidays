@@ -39,31 +39,31 @@ interface SearchResult {
 // ── Static nav pages ─────────────────────────────────────────────────────────
 
 const NAV_PAGES = [
-  { label: "Overview",          url: "/",                  icon: LayoutDashboard, color: "#B23A4E" },
+  { label: "Overview",          url: "/",                  icon: LayoutDashboard, color: "#1F6F72" },
   { label: "Web Analytics",     url: "/web-analytics",     icon: Globe,           color: "#52A882" },
-  { label: "Content",           url: "/content",           icon: FileText,        color: "#B85C6E" },
-  { label: "Leads",             url: "/leads",             icon: Users,           color: "#9B2C3F" },
+  { label: "Content",           url: "/content",           icon: FileText,        color: "#3F7F80" },
+  { label: "Leads",             url: "/leads",             icon: Users,           color: "#13585B" },
   { label: "Campaign Design",   url: "/campaign-design",   icon: Megaphone,       color: "#E07A5A" },
   { label: "RAG Model",         url: "/itineraries",       icon: Map,             color: "#52A882" },
-  { label: "Clients & PMS",     url: "/client-pms",        icon: UserCircle2,     color: "#B85C6E" },
+  { label: "Clients & PMS",     url: "/client-pms",        icon: UserCircle2,     color: "#3F7F80" },
   { label: "Suppliers",         url: "/suppliers",         icon: Truck,           color: "#D48A2E" },
-  { label: "Supplier Reachout", url: "/supplier-reachout", icon: Bot,             color: "#9B2C3F" },
+  { label: "Supplier Reachout", url: "/supplier-reachout", icon: Bot,             color: "#13585B" },
   { label: "Active Deals",      url: "/active-deals",      icon: Handshake,       color: "#52A882" },
   { label: "Scheduling",        url: "/scheduling",        icon: CalendarClock,   color: "#E07A5A" },
   { label: "Finance KPIs",      url: "/finance-kpis",      icon: IndianRupee,     color: "#52A882" },
-  { label: "Team Chat",         url: "/chat",              icon: MessageSquare,   color: "#B23A4E" },
-  { label: "Creatives",         url: "/creatives",         icon: ImagePlus,       color: "#B85C6E" },
+  { label: "Team Chat",         url: "/chat",              icon: MessageSquare,   color: "#1F6F72" },
+  { label: "Creatives",         url: "/creatives",         icon: ImagePlus,       color: "#3F7F80" },
   { label: "Automations",       url: "/automations",       icon: Zap,             color: "#D48A2E" },
-  { label: "Lead Analytics",    url: "/lead-analytics",    icon: TrendingUp,      color: "#9B2C3F" },
-  { label: "Zeno AI",           url: "/mxai",              icon: Sparkles,        color: "#B85C6E" },
-  { label: "My Profile",        url: "/profile",           icon: UserCircle2,     color: "#B23A4E" },
+  { label: "Lead Analytics",    url: "/lead-analytics",    icon: TrendingUp,      color: "#13585B" },
+  { label: "Zeno AI",           url: "/mxai",              icon: Sparkles,        color: "#3F7F80" },
+  { label: "My Profile",        url: "/profile",           icon: UserCircle2,     color: "#1F6F72" },
 ];
 
 const QUICK_ACTIONS = [
-  { label: "Open Zeno AI",      url: "/mxai",              icon: Sparkles,        color: "#B85C6E" },
-  { label: "Add New Lead",      url: "/leads",             icon: Users,           color: "#9B2C3F" },
+  { label: "Open Zeno AI",      url: "/mxai",              icon: Sparkles,        color: "#3F7F80" },
+  { label: "Add New Lead",      url: "/leads",             icon: Users,           color: "#13585B" },
   { label: "View Automations",  url: "/automations",       icon: Zap,             color: "#D48A2E" },
-  { label: "Team Chat",         url: "/chat",              icon: MessageSquare,   color: "#B23A4E" },
+  { label: "Team Chat",         url: "/chat",              icon: MessageSquare,   color: "#1F6F72" },
 ];
 
 const CATEGORY_LABELS: Record<ResultCategory, string> = {
@@ -101,21 +101,21 @@ export function GlobalSearch() {
   const debouncedQ  = useDebounce(query, 220);
 
   // ── Theme ──────────────────────────────────────────────────────────────────
-  const BG           = dark ? "#241418" : "#F3EAEA";
-  const PANEL_BG     = dark ? "#2B181D" : "#F3EAEA";
+  const BG           = dark ? "#0C2C32" : "#F3EAEA";
+  const PANEL_BG     = dark ? "#10343A" : "#F3EAEA";
   const SHADOW_OUT   = dark
-    ? "5px 5px 12px #120A0C, -5px -5px 12px #352027"
+    ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A"
     : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
   const SHADOW_IN    = dark
-    ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027"
+    ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A"
     : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
   const PANEL_SHADOW = dark
-    ? "0 20px 60px #0A0A18, 0 4px 20px #120A0C"
+    ? "0 20px 60px #0A0A18, 0 4px 20px #061A1E"
     : "0 20px 60px rgba(0,0,0,0.15), 0 4px 20px rgba(0,0,0,0.08)";
-  const TEXT_MAIN    = dark ? "#F0D8DC" : "#3A2428";
-  const TEXT_MUTED   = dark ? "#A07A82" : "#9A8285";
-  const BORDER       = dark ? "#3A232B" : "#E8DADB";
-  const HOVER_BG     = dark ? "rgba(178,58,78,0.10)" : "rgba(178,58,78,0.07)";
+  const TEXT_MAIN    = dark ? "#E6EFEC" : "#1A2324";
+  const TEXT_MUTED   = dark ? "#8FA6A3" : "#5B6766";
+  const BORDER       = dark ? "#1E3E44" : "#E8DADB";
+  const HOVER_BG     = dark ? "rgba(20,100,110,0.10)" : "rgba(20,100,110,0.07)";
 
   // ── Keyboard shortcut (Ctrl+K / Cmd+K) ────────────────────────────────────
   useEffect(() => {
@@ -181,7 +181,7 @@ export function GlobalSearch() {
           label: l.name ?? "Unnamed Lead",
           sublabel: `${l.stage ?? "New"} · ${l.destination ?? l.email ?? ""}`,
           icon: Users,
-          color: "#9B2C3F",
+          color: "#13585B",
           action: () => { navigate("/leads"); close(); },
         });
       });
@@ -336,7 +336,7 @@ export function GlobalSearch() {
           borderBottom: displayList.length ? `1px solid ${BORDER}` : "none",
         }}>
           {loading
-            ? <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${BORDER}`, borderTopColor: "#B23A4E", animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
+            ? <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${BORDER}`, borderTopColor: "#1F6F72", animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
             : <Search style={{ width: 18, height: 18, color: TEXT_MUTED, flexShrink: 0 }} />}
           <input
             ref={inputRef}
@@ -451,7 +451,7 @@ export function GlobalSearch() {
             </div>
           ))}
           <span style={{ marginLeft: "auto", fontSize: 10, color: TEXT_MUTED }}>
-            BusinessOS Search
+            Custom Holidays Search
           </span>
         </div>
       </div>

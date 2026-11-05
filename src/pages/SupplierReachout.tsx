@@ -296,10 +296,10 @@ const ACTIVE_DEALS = [
 
 const TYPE_COLORS: Record<string, string> = {
   "Luxury Hotel / Resort": "bg-blue-100 text-blue-700",
-  "Boutique Hotel":        "bg-rose-100 text-rose-700",
+  "Boutique Hotel":        "bg-teal-100 text-teal-700",
   "Budget Hotel":          "bg-slate-100 text-slate-600",
   "Transport":             "bg-amber-100 text-amber-700",
-  "Tour Operator":         "bg-rose-100 text-rose-700",
+  "Tour Operator":         "bg-teal-100 text-teal-700",
   "Travel Agency":         "bg-pink-100 text-pink-700",
   "Local Guide":           "bg-lime-100 text-lime-700",
   "Activity Provider":     "bg-green-100 text-green-700",
@@ -313,7 +313,7 @@ const FOLLOW_STATUS_META: Record<FollowUpLog["followup_status"], { label: string
   failed:   { label: "Failed",   color: "text-red-500",    dot: "bg-red-400" },
 };
 
-const GRADS = ["from-rose-500 to-rose-600","from-emerald-500 to-teal-600","from-blue-500 to-cyan-600","from-orange-500 to-amber-600","from-rose-500 to-pink-600","from-rose-500 to-blue-600"];
+const GRADS = ["from-teal-500 to-teal-600","from-emerald-500 to-teal-600","from-blue-500 to-cyan-600","from-orange-500 to-amber-600","from-teal-500 to-pink-600","from-teal-500 to-blue-600"];
 function grad(name: string) { let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffff; return GRADS[h % GRADS.length]; }
 function initials(name: string) { return name.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join(""); }
 function renderContent(text: string) {
@@ -424,7 +424,7 @@ function ChasesPanel({ logs, onRefresh }: { logs: FollowUpLog[]; onRefresh: () =
               <div key={log.id} className={`rounded-2xl border overflow-hidden transition-all ${overdue ? "border-red-300 bg-red-50/50" : "border-border bg-card"}`}>
                 <div className="flex items-start gap-3 px-4 py-3">
                   {/* avatar */}
-                  <div className={`h-9 w-9 rounded-full bg-[#8A5A63] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>
+                  <div className={`h-9 w-9 rounded-full bg-[#3E6B6C] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>
                     {initials(log.supplier_name)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -655,7 +655,7 @@ function BulkModal({ suppliers, onClose }: { suppliers: Supplier[]; onClose: () 
                   {filteredS.map(s => (
                     <label key={s.id} className={`flex items-start gap-3 px-4 py-3 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors ${selectedIds.has(s.id)?"bg-amber-50":""}`}>
                       <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggle(s.id)} className="mt-1 rounded accent-amber-500 h-3.5 w-3.5 shrink-0" />
-                      <div className={`h-8 w-8 rounded-full bg-[#8A5A63] flex items-center justify-center shrink-0 text-[11px] font-semibold text-white`}>{initials(s.name)}</div>
+                      <div className={`h-8 w-8 rounded-full bg-[#3E6B6C] flex items-center justify-center shrink-0 text-[11px] font-semibold text-white`}>{initials(s.name)}</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-card-foreground truncate">{s.name}</p>
                         <p className="text-[11px] text-muted-foreground truncate">{s.supplier_type||"Supplier"}</p>
@@ -691,11 +691,11 @@ function BulkModal({ suppliers, onClose }: { suppliers: Supplier[]; onClose: () 
                     onChange={e => { setCustomMessage(e.target.value); setUseCustom(true); }}
                     className="w-full rounded-xl border border-border bg-muted/30 text-sm px-3 py-2 focus:outline-none focus:border-amber-400 resize-none transition-all" />
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-50 border border-rose-200">
-                  <input type="checkbox" id="personalise-cb" checked={personalise} onChange={e => setPersonalise(e.target.checked)} className="accent-rose-500 h-4 w-4" />
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 border border-teal-200">
+                  <input type="checkbox" id="personalise-cb" checked={personalise} onChange={e => setPersonalise(e.target.checked)} className="accent-teal-500 h-4 w-4" />
                   <div>
-                    <label htmlFor="personalise-cb" className="text-xs font-semibold text-rose-800 cursor-pointer">AI Personalisation</label>
-                    <p className="text-[11px] text-rose-600">Each message uniquely tailored to the supplier's profile</p>
+                    <label htmlFor="personalise-cb" className="text-xs font-semibold text-teal-800 cursor-pointer">AI Personalisation</label>
+                    <p className="text-[11px] text-teal-600">Each message uniquely tailored to the supplier's profile</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
@@ -722,7 +722,7 @@ function BulkModal({ suppliers, onClose }: { suppliers: Supplier[]; onClose: () 
                 {selectedSuppliers.slice(0, 3).map(s => (
                   <div key={s.id} className="rounded-xl border border-border overflow-hidden">
                     <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/30 border-b border-border">
-                      <div className={`h-7 w-7 rounded-full bg-[#8A5A63] flex items-center justify-center text-[11px] font-semibold text-white`}>{initials(s.name)}</div>
+                      <div className={`h-7 w-7 rounded-full bg-[#3E6B6C] flex items-center justify-center text-[11px] font-semibold text-white`}>{initials(s.name)}</div>
                       <div>
                         <p className="text-xs font-semibold text-card-foreground">{s.name}</p>
                         <p className="text-[11px] text-muted-foreground">{s.supplier_type} · {s.phone?"via WhatsApp":"via Email"}</p>
@@ -780,7 +780,7 @@ function BulkModal({ suppliers, onClose }: { suppliers: Supplier[]; onClose: () 
               <div className="rounded-xl border border-border overflow-hidden max-h-60 overflow-y-auto">
                 {results.map((r, i) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border/40 last:border-0">
-                    <div className={`h-7 w-7 rounded-full bg-[#8A5A63] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>{initials(r.supplier.name)}</div>
+                    <div className={`h-7 w-7 rounded-full bg-[#3E6B6C] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>{initials(r.supplier.name)}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-card-foreground truncate">{r.supplier.name}</p>
                       <p className="text-[11px] text-muted-foreground">{r.supplier.phone?"WhatsApp opened":"Email opened"}</p>
@@ -917,7 +917,7 @@ What would you like to communicate?` }]);
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <input placeholder="Search suppliers…" className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-muted/40 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all"
+              <input placeholder="Search suppliers…" className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-muted/40 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all"
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex gap-1 p-1 bg-muted/40 rounded-xl">
@@ -970,10 +970,10 @@ What would you like to communicate?` }]);
               const hasChase  = followUpLogs.some(l => l.supplier_id === s.id && (l.followup_status === "pending" || l.followup_status === "sent"));
               return (
                 <button key={s.id} onClick={() => { selectSupplier(s); if (filterTab === "Chases") setFilterTab("All"); }}
-                  className={`w-full text-left px-4 py-3.5 border-b border-border/40 transition-all hover:bg-muted/30 ${isActive?"bg-rose-50 border-l-[3px] border-l-violet-500":""}`}>
+                  className={`w-full text-left px-4 py-3.5 border-b border-border/40 transition-all hover:bg-muted/30 ${isActive?"bg-teal-50 border-l-[3px] border-l-violet-500":""}`}>
                   <div className="flex items-start gap-3">
                     <div className="relative">
-                      <div className={`h-10 w-10 rounded-full bg-[#8A5A63] flex items-center justify-center shrink-0 text-[11px] font-semibold text-white shadow-sm`}>{initials(s.name)}</div>
+                      <div className={`h-10 w-10 rounded-full bg-[#3E6B6C] flex items-center justify-center shrink-0 text-[11px] font-semibold text-white shadow-sm`}>{initials(s.name)}</div>
                       {hasChase && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-amber-400 border-2 border-card" title="Pending follow-up" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1039,7 +1039,7 @@ What would you like to communicate?` }]);
                 <div className="px-5 py-3 border-b border-black/10 bg-[#075e54] shrink-0">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-full bg-[#8A5A63] flex items-center justify-center text-[11px] font-semibold text-white shadow-sm`}>{initials(selected.name)}</div>
+                      <div className={`h-10 w-10 rounded-full bg-[#3E6B6C] flex items-center justify-center text-[11px] font-semibold text-white shadow-sm`}>{initials(selected.name)}</div>
                       <div>
                         <p className="text-sm font-semibold text-white">{selected.name}</p>
                         <div className="flex items-center gap-2 text-[11px] text-green-300">

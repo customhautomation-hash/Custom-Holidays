@@ -4,9 +4,9 @@ import { Users, TrendingUp, Target, PhoneCall, ArrowUpRight, ArrowDownRight, Bar
 
 const funnelStages = [
   { stage: "Website Visitors", count: 14200, pct: 100, color: "bg-blue-400" },
-  { stage: "Inquiries Received", count: 1840, pct: 13, color: "bg-rose-400" },
-  { stage: "Qualified Leads", count: 920, pct: 6.5, color: "bg-rose-400" },
-  { stage: "Proposals Sent", count: 460, pct: 3.2, color: "bg-rose-400" },
+  { stage: "Inquiries Received", count: 1840, pct: 13, color: "bg-teal-400" },
+  { stage: "Qualified Leads", count: 920, pct: 6.5, color: "bg-teal-400" },
+  { stage: "Proposals Sent", count: 460, pct: 3.2, color: "bg-teal-400" },
   { stage: "Bookings Confirmed", count: 184, pct: 1.3, color: "bg-accent" },
 ];
 

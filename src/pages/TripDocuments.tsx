@@ -83,12 +83,12 @@ export default function TripDocuments() {
   const { dark } = useDarkMode();
 
   // ── Theme ────────────────────────────────────────────────────────────────
-  const BG         = dark ? "#241418" : "#F3EAEA";
-  const SHADOW_OUT = dark ? "5px 5px 12px #120A0C, -5px -5px 12px #352027" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
-  const SHADOW_IN  = dark ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
-  const TEXT_MAIN  = dark ? "#F0D8DC" : "#3A2428";
-  const TEXT_MUTED = dark ? "#A07A82" : "#9A8285";
-  const ACCENT     = "#9B2C3F";
+  const BG         = dark ? "#0C2C32" : "#F3EAEA";
+  const SHADOW_OUT = dark ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
+  const SHADOW_IN  = dark ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
+  const TEXT_MAIN  = dark ? "#E6EFEC" : "#1A2324";
+  const TEXT_MUTED = dark ? "#8FA6A3" : "#5B6766";
+  const ACCENT     = "#13585B";
 
   const card: React.CSSProperties = { background: BG, boxShadow: SHADOW_OUT, borderRadius: 20, padding: 20 };
   const input: React.CSSProperties = {
@@ -96,7 +96,7 @@ export default function TripDocuments() {
     fontSize: 14, color: TEXT_MAIN, outline: "none", width: "100%",
   };
   const btn = (primary = false): React.CSSProperties => ({
-    background: primary ? "#9B2C3F" : BG,
+    background: primary ? "#13585B" : BG,
     color: primary ? "#fff" : TEXT_MAIN, boxShadow: SHADOW_OUT, border: "none", borderRadius: 12,
     padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
     display: "inline-flex", alignItems: "center", gap: 7,
@@ -331,7 +331,7 @@ export default function TripDocuments() {
   const Toggle = ({ on, set, disabled }: { on: boolean; set: (v: boolean) => void; disabled?: boolean }) => (
     <button disabled={disabled} onClick={() => set(!on)} style={{
       width: 38, height: 22, borderRadius: 99, border: "none", cursor: disabled ? "not-allowed" : "pointer",
-      background: on ? "#9B2C3F" : BG, boxShadow: on ? "none" : SHADOW_IN,
+      background: on ? "#13585B" : BG, boxShadow: on ? "none" : SHADOW_IN,
       position: "relative", opacity: disabled ? 0.5 : 1, flexShrink: 0,
     }}>
       <span style={{ position: "absolute", top: 3, left: on ? 19 : 3, width: 16, height: 16, borderRadius: 99, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
@@ -347,7 +347,7 @@ export default function TripDocuments() {
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 14, background: "#9B2C3F", boxShadow: SHADOW_OUT, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 46, height: 46, borderRadius: 14, background: "#13585B", boxShadow: SHADOW_OUT, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <FolderTree style={{ width: 22, height: 22, color: "#fff" }} />
           </div>
           <div>
@@ -413,7 +413,7 @@ export default function TripDocuments() {
             style={{
               borderRadius: 18, padding: "28px 16px", textAlign: "center", cursor: "pointer",
               boxShadow: SHADOW_IN, border: `2px dashed ${dragTarget === "all" ? ACCENT : "transparent"}`,
-              background: dragTarget === "all" ? (dark ? "#22223C" : "#F7ECEE") : BG, transition: "all .15s",
+              background: dragTarget === "all" ? (dark ? "#22223C" : "#EEF3F1") : BG, transition: "all .15s",
             }}>
             <Upload style={{ width: 28, height: 28, color: ACCENT, margin: "0 auto 8px" }} />
             <div style={{ fontSize: 15, fontWeight: 600, color: TEXT_MAIN }}>Drop all files or folders here</div>

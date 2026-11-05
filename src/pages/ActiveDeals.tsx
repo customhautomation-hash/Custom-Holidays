@@ -139,7 +139,7 @@ function DealModal({ deal, suppliers, onClose, onSave, saving }: ModalProps) {
     await onSave(form);
   };
 
-  const field = "w-full px-3 py-2 rounded-lg border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-rose-400/40 focus:border-rose-400 transition";
+  const field = "w-full px-3 py-2 rounded-lg border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal-400/40 focus:border-teal-400 transition";
   const label = "block text-xs font-medium text-muted-foreground mb-1  ";
 
   return (
@@ -506,7 +506,7 @@ function ActiveDeals() {
                 onClick={() => setFilter(f)}
                 className={"px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border " +
                   (filter === f
-                    ? "bg-rose-500 text-white border-rose-500"
+                    ? "bg-teal-500 text-white border-teal-500"
                     : "border-border text-muted-foreground hover:bg-muted")}>
                 {f}
               </button>
@@ -547,7 +547,7 @@ function ActiveDeals() {
 
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <MapPin className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                        <MapPin className="h-3.5 w-3.5 text-teal-400 shrink-0" />
                         <span className="truncate">{deal.destination || "—"}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

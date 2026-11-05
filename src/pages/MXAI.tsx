@@ -703,7 +703,7 @@ export default function MXAI() {
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground text-center mt-2">
-                  Zeno · Powered by BusinessOS AI
+                  Zeno · Powered by Custom Holidays AI
                 </p>
               </div>
             </>

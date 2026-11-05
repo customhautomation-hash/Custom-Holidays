@@ -105,13 +105,13 @@ function StatCard({
       transition={{ duration: 0.3 }}
       className="p-5" style={neu}
     >
-      <p className="text-[13px]" style={{ color: "var(--muted-foreground, #9A8285)" }}>{title}</p>
+      <p className="text-[13px]" style={{ color: "var(--muted-foreground, #5B6766)" }}>{title}</p>
       {loading ? (
         <div className="h-8 w-24 mt-3 rounded-lg animate-pulse" style={{ background: "var(--neu-dark, #E8DADB)" }} />
       ) : (
-        <p className="text-[28px] leading-none mt-3 font-medium tabular-nums" style={{ color: "var(--foreground, #3A2428)" }}>{value}</p>
+        <p className="text-[28px] leading-none mt-3 font-medium tabular-nums" style={{ color: "var(--foreground, #1A2324)" }}>{value}</p>
       )}
-      <p className="text-xs mt-3 tabular-nums" style={{ color: positive ? "var(--muted-foreground, #9A8285)" : "#B4473A" }}>{change}</p>
+      <p className="text-xs mt-3 tabular-nums" style={{ color: positive ? "var(--muted-foreground, #5B6766)" : "#B4473A" }}>{change}</p>
     </motion.div>
   );
 }
@@ -125,7 +125,7 @@ function RevenueBar({ entries }: { entries: FinanceEntry[] }) {
   })).reverse();
 
   if (!data.length) return (
-    <div className="h-48 flex items-center justify-center text-sm" style={{ color: "var(--muted-foreground, #9A8285)" }}>
+    <div className="h-48 flex items-center justify-center text-sm" style={{ color: "var(--muted-foreground, #5B6766)" }}>
       No booking data yet
     </div>
   );
@@ -134,15 +134,15 @@ function RevenueBar({ entries }: { entries: FinanceEntry[] }) {
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data} barSize={20} barGap={4}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--neu-dark, #E8DADB)" />
-        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground, #9A8285)" }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground, #9A8285)" }} axisLine={false} tickLine={false}
+        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground, #5B6766)" }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground, #5B6766)" }} axisLine={false} tickLine={false}
           tickFormatter={v => fmtCompact(v)} />
         <Tooltip
-          contentStyle={{ background: "#3D252C", border: "none", borderRadius: 8, color: "#F6EEEE", fontSize: 12 }}
+          contentStyle={{ background: "#0B3B3D", border: "none", borderRadius: 8, color: "#F3EAEA", fontSize: 12 }}
           formatter={(v: number, name: string) => [fmt(v), name === "revenue" ? "Revenue" : "Profit"]}
         />
-        <Bar dataKey="revenue" fill="#9B2C3F" radius={[6, 6, 0, 0]} />
-        <Bar dataKey="profit" fill="#D9B7BD" radius={[6, 6, 0, 0]} />
+        <Bar dataKey="revenue" fill="#13585B" radius={[6, 6, 0, 0]} />
+        <Bar dataKey="profit" fill="#D4AF5A" radius={[6, 6, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -151,7 +151,7 @@ function RevenueBar({ entries }: { entries: FinanceEntry[] }) {
 // ─── Lead Pipeline ──────────────────────────────────────────
 function PipelineBar({ leads }: { leads: Lead[] }) {
   const statusOrder = ["new", "contacted", "qualified", "proposal", "booked", "closed"];
-  const colors = ["#9B2C3F", "#A84A5B", "#B76A77", "#C68A93", "#D4A9AF", "#E0C4C8"];
+  const colors = ["#13585B", "#A84A5B", "#4C8C93", "#6EA2A7", "#93BABD", "#B9D2D3"];
 
   const counts = statusOrder.map(s => ({
     name: s.charAt(0).toUpperCase() + s.slice(1),
@@ -160,7 +160,7 @@ function PipelineBar({ leads }: { leads: Lead[] }) {
   const max = Math.max(...counts.map(c => c.count), 1);
 
   if (!leads.length) return (
-    <div className="h-32 flex items-center justify-center text-sm" style={{ color: "var(--muted-foreground, #9A8285)" }}>
+    <div className="h-32 flex items-center justify-center text-sm" style={{ color: "var(--muted-foreground, #5B6766)" }}>
       No leads data yet
     </div>
   );
@@ -169,7 +169,7 @@ function PipelineBar({ leads }: { leads: Lead[] }) {
     <div className="space-y-3">
       {counts.filter(c => c.count > 0).map((stage, i) => (
         <div key={stage.name} className="flex items-center gap-3">
-          <span className="text-xs w-20 shrink-0" style={{ color: "var(--muted-foreground, #9A8285)" }}>{stage.name}</span>
+          <span className="text-xs w-20 shrink-0" style={{ color: "var(--muted-foreground, #5B6766)" }}>{stage.name}</span>
           <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={neuInset}>
             <motion.div
               initial={{ width: 0 }}
@@ -179,7 +179,7 @@ function PipelineBar({ leads }: { leads: Lead[] }) {
               style={{ background: colors[i % colors.length] }}
             />
           </div>
-          <span className="text-sm font-semibold w-8 text-right" style={{ color: "var(--foreground, #3A2428)" }}>{stage.count}</span>
+          <span className="text-sm font-semibold w-8 text-right" style={{ color: "var(--foreground, #1A2324)" }}>{stage.count}</span>
         </div>
       ))}
     </div>
@@ -191,20 +191,20 @@ function ActivityFeed({ entries, suppliers }: { entries: FinanceEntry[]; supplie
   const items = [
     ...entries.slice(0, 3).map(e => ({
       icon: ShoppingBag,
-      color: "var(--muted-foreground, #9A8285)",
+      color: "var(--muted-foreground, #5B6766)",
       text: `Booking: ${e.trip_name || "New booking"} — ${fmt(e.revenue)}`,
       time: timeAgo(e.booking_date),
     })),
     ...suppliers.slice(0, 2).map(s => ({
       icon: CheckCircle,
-      color: "var(--muted-foreground, #9A8285)",
+      color: "var(--muted-foreground, #5B6766)",
       text: `Supplier onboarded: ${s.name} (${s.supplier_type || "General"})`,
       time: "recently",
     })),
   ].slice(0, 5);
 
   if (!items.length) return (
-    <p className="text-sm text-center py-4" style={{ color: "var(--muted-foreground, #9A8285)" }}>No recent activity</p>
+    <p className="text-sm text-center py-4" style={{ color: "var(--muted-foreground, #5B6766)" }}>No recent activity</p>
   );
 
   return (
@@ -215,8 +215,8 @@ function ActivityFeed({ entries, suppliers }: { entries: FinanceEntry[]; supplie
             <item.icon style={{ width: 16, height: 16, color: item.color }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm leading-snug" style={{ color: "var(--foreground, #3A2428)" }}>{item.text}</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground, #9A8285)" }}>{item.time}</p>
+            <p className="text-sm leading-snug" style={{ color: "var(--foreground, #1A2324)" }}>{item.text}</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground, #5B6766)" }}>{item.time}</p>
           </div>
         </div>
       ))}
@@ -319,8 +319,8 @@ const Index = () => {
         {/* Header */}
         <div className="flex items-end justify-between">
           <div>
-            <h1 className="text-[28px] font-serif font-medium leading-tight" style={{ color: "var(--foreground, #3A2428)" }}>Overview</h1>
-            <p className="text-sm mt-1" style={{ color: "var(--muted-foreground, #9A8285)" }}>
+            <h1 className="text-[28px] font-serif font-medium leading-tight" style={{ color: "var(--foreground, #1A2324)" }}>Overview</h1>
+            <p className="text-sm mt-1" style={{ color: "var(--muted-foreground, #5B6766)" }}>
               {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
               {" · "}{loading ? "Loading" : "Live data"}
             </p>
@@ -341,7 +341,7 @@ const Index = () => {
             change={`${newLeadsThisWeek} new this week`}
             positive
             icon={Users}
-            iconColor="#9B2C3F"
+            iconColor="#13585B"
             loading={loading}
           />
           <StatCard
@@ -359,7 +359,7 @@ const Index = () => {
             change={kpi ? `${kpi.bookings.confirmed} of ${kpi.bookings.total} booked` : `${leads.filter(l => l.status === "booked").length} booked`}
             positive
             icon={TrendingUp}
-            iconColor="#B85C6E"
+            iconColor="#3F7F80"
             loading={loading}
           />
           <StatCard
@@ -383,13 +383,13 @@ const Index = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}
               className="p-5" style={neu}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium" style={{ color: "var(--foreground, #3A2428)" }}>Revenue by Booking</h3>
-                <div className="flex items-center gap-3 text-xs" style={{ color: "var(--muted-foreground, #9A8285)" }}>
+                <h3 className="text-sm font-medium" style={{ color: "var(--foreground, #1A2324)" }}>Revenue by Booking</h3>
+                <div className="flex items-center gap-3 text-xs" style={{ color: "var(--muted-foreground, #5B6766)" }}>
                   <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full inline-block" style={{ background: "#9B2C3F" }} /> Revenue
+                    <span className="h-2 w-2 rounded-full inline-block" style={{ background: "#13585B" }} /> Revenue
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full inline-block" style={{ background: "#D9B7BD" }} /> Profit
+                    <span className="h-2 w-2 rounded-full inline-block" style={{ background: "#D4AF5A" }} /> Profit
                   </span>
                 </div>
               </div>
@@ -404,8 +404,8 @@ const Index = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
               className="p-5" style={neu}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium" style={{ color: "var(--foreground, #3A2428)" }}>Lead Pipeline</h3>
-                <span className="text-xs" style={{ color: "var(--muted-foreground, #9A8285)" }}>{totalLeads} total leads</span>
+                <h3 className="text-sm font-medium" style={{ color: "var(--foreground, #1A2324)" }}>Lead Pipeline</h3>
+                <span className="text-xs" style={{ color: "var(--muted-foreground, #5B6766)" }}>{totalLeads} total leads</span>
               </div>
               {loading ? (
                 <div className="space-y-3">
@@ -422,19 +422,19 @@ const Index = () => {
             {kpi && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
                 className="p-5" style={neu}>
-                <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--foreground, #3A2428)" }}>
+                <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--foreground, #1A2324)" }}>
                   Finance Summary — {kpi.month_start && new Date(kpi.month_start).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
-                    { label: "Gross Profit", value: fmtCompact(kpi.profit.gross_profit), color: "var(--foreground, #3A2428)" },
-                    { label: "Margin", value: pct(kpi.profit.profit_margin), color: "var(--foreground, #3A2428)" },
-                    { label: "Expenses", value: fmtCompact(kpi.expenses.total), color: "var(--foreground, #3A2428)" },
-                    { label: "Pipeline", value: fmtCompact(kpi.revenue.pipeline_total), color: "var(--foreground, #3A2428)" },
+                    { label: "Gross Profit", value: fmtCompact(kpi.profit.gross_profit), color: "var(--foreground, #1A2324)" },
+                    { label: "Margin", value: pct(kpi.profit.profit_margin), color: "var(--foreground, #1A2324)" },
+                    { label: "Expenses", value: fmtCompact(kpi.expenses.total), color: "var(--foreground, #1A2324)" },
+                    { label: "Pipeline", value: fmtCompact(kpi.revenue.pipeline_total), color: "var(--foreground, #1A2324)" },
                   ].map(item => (
                     <div key={item.label} className="p-3 text-center" style={neuInset}>
                       <p className="text-lg font-medium tabular-nums" style={{ color: item.color }}>{item.value}</p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground, #9A8285)" }}>{item.label}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground, #5B6766)" }}>{item.label}</p>
                     </div>
                   ))}
                 </div>
@@ -452,21 +452,21 @@ const Index = () => {
                 value: String(onlineCount),
                 sub: "members active now",
                 icon: Activity,
-                color: "var(--muted-foreground, #9A8285)",
+                color: "var(--muted-foreground, #5B6766)",
               },
               {
                 label: "Pending Revenue",
                 value: kpi ? fmtCompact(kpi.revenue.pending) : "—",
                 sub: "awaiting collection",
                 icon: Clock,
-                color: "var(--muted-foreground, #9A8285)",
+                color: "var(--muted-foreground, #5B6766)",
               },
               {
                 label: "Confirmed Bookings",
                 value: kpi ? String(kpi.bookings.confirmed) : String(leads.filter(l => l.status === "booked").length),
                 sub: "this month",
                 icon: CheckCircle,
-                color: "var(--muted-foreground, #9A8285)",
+                color: "var(--muted-foreground, #5B6766)",
               },
             ].map(({ label, value, sub, icon: Icon, color }) => (
               <motion.div
@@ -484,10 +484,10 @@ const Index = () => {
                   {loading ? (
                     <div className="h-6 w-16 rounded animate-pulse mb-1" style={{ background: "var(--neu-dark, #E8DADB)" }} />
                   ) : (
-                    <p className="text-xl font-medium tabular-nums" style={{ color: "var(--foreground, #3A2428)" }}>{value}</p>
+                    <p className="text-xl font-medium tabular-nums" style={{ color: "var(--foreground, #1A2324)" }}>{value}</p>
                   )}
-                  <p className="text-xs font-medium" style={{ color: "var(--foreground, #3A2428)" }}>{label}</p>
-                  <p className="text-[11px]" style={{ color: "var(--muted-foreground, #9A8285)" }}>{sub}</p>
+                  <p className="text-xs font-medium" style={{ color: "var(--foreground, #1A2324)" }}>{label}</p>
+                  <p className="text-[11px]" style={{ color: "var(--muted-foreground, #5B6766)" }}>{sub}</p>
                 </div>
               </motion.div>
             ))}
@@ -496,7 +496,7 @@ const Index = () => {
             {kpi && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
                 className="p-5" style={neu}>
-                <h3 className="text-sm font-medium mb-4" style={{ color: "var(--foreground, #3A2428)" }}>Monthly Targets</h3>
+                <h3 className="text-sm font-medium mb-4" style={{ color: "var(--foreground, #1A2324)" }}>Monthly Targets</h3>
                 <div className="space-y-4">
                   {[
                     {
@@ -516,8 +516,8 @@ const Index = () => {
                     return (
                       <div key={label}>
                         <div className="flex justify-between text-xs mb-1.5">
-                          <span style={{ color: "var(--foreground, #3A2428)" }}>{label}</span>
-                          <span style={{ color: "var(--muted-foreground, #9A8285)" }}>{fmtFn(current)} / {fmtFn(target)}</span>
+                          <span style={{ color: "var(--foreground, #1A2324)" }}>{label}</span>
+                          <span style={{ color: "var(--muted-foreground, #5B6766)" }}>{fmtFn(current)} / {fmtFn(target)}</span>
                         </div>
                         <div className="h-2.5 rounded-full overflow-hidden" style={neuInset}>
                           <motion.div
@@ -525,10 +525,10 @@ const Index = () => {
                             animate={{ width: `${progress}%` }}
                             transition={{ duration: 0.9 }}
                             className="h-full rounded-full"
-                            style={{ background: "#9B2C3F" }}
+                            style={{ background: "#13585B" }}
                           />
                         </div>
-                        <p className="text-[11px] mt-1 text-right" style={{ color: "var(--muted-foreground, #9A8285)" }}>
+                        <p className="text-[11px] mt-1 text-right" style={{ color: "var(--muted-foreground, #5B6766)" }}>
                           {progress.toFixed(0)}% achieved
                         </p>
                       </div>
@@ -541,7 +541,7 @@ const Index = () => {
             {/* Recent Activity */}
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
               className="p-5" style={neu}>
-              <h3 className="text-sm font-medium mb-4" style={{ color: "var(--foreground, #3A2428)" }}>Recent Activity</h3>
+              <h3 className="text-sm font-medium mb-4" style={{ color: "var(--foreground, #1A2324)" }}>Recent Activity</h3>
               {loading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map(i => (

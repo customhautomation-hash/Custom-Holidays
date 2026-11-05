@@ -1,11 +1,11 @@
 {
-  "name": "BusinessOS",
-  "short_name": "BusinessOS",
+  "name": "Custom Holidays",
+  "short_name": "Custom Holidays",
   "description": "All-in-one business operating system for modern teams",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#E8E8F2",
-  "theme_color": "#7B8FE0",
+  "theme_color": "#0E3B43",
   "orientation": "portrait-primary",
   "icons": [
     {

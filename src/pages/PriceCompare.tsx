@@ -166,15 +166,15 @@ async function authFetch(path: string, body?: any) {
 export default function PriceCompare() {
   const { dark } = useDarkMode();
   // ── Dashboard palette (neumorphic) ─────────────────────────────────────────
-  const BG = dark ? "#241418" : "#F3EAEA";
-  const SHADOW_OUT = dark ? "5px 5px 12px #120A0C, -5px -5px 12px #352027" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
-  const SHADOW_SM = dark ? "3px 3px 7px #120A0C, -3px -3px 7px #352027" : "3px 3px 7px #D9C6C8, -3px -3px 7px #FFFFFF";
-  const SHADOW_IN = dark ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
-  const TEXT = dark ? "#F0D8DC" : "#3A2428";
-  const MUTED = dark ? "#A07A82" : "#9A8285";
-  const ACCENT = "#9B2C3F";
-  const GRAD = "#9B2C3F";
-  const GREEN = "#2FA37A", PURPLE = "#A8475C", WARN = "#C98A2B", ERR = "#D1435B";
+  const BG = dark ? "#0C2C32" : "#F3EAEA";
+  const SHADOW_OUT = dark ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
+  const SHADOW_SM = dark ? "3px 3px 7px #061A1E, -3px -3px 7px #16434A" : "3px 3px 7px #D9C6C8, -3px -3px 7px #FFFFFF";
+  const SHADOW_IN = dark ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
+  const TEXT = dark ? "#E6EFEC" : "#1A2324";
+  const MUTED = dark ? "#8FA6A3" : "#5B6766";
+  const ACCENT = "#13585B";
+  const GRAD = "#13585B";
+  const GREEN = "#2FA37A", PURPLE = "#2C6D70", WARN = "#C98A2B", ERR = "#1F6F72";
   const TINT = dark ? "rgba(107,127,212,0.14)" : "rgba(107,127,212,0.10)";
 
   const card: React.CSSProperties = { background: BG, borderRadius: 18, boxShadow: SHADOW_OUT };
@@ -1591,7 +1591,7 @@ export default function PriceCompare() {
           const ids = { cheapest: top("cheapest")?.id, best: top("best")?.id, rated: top("rated")?.id };
           const badges = (h: Hotel) => ({ cheapest: h.id === ids.cheapest && hasPrice(h), best: h.id === ids.best && hasPrice(h), rated: h.id === ids.rated && !!h.rating });
           const white: React.CSSProperties = { ...lbl, color: "rgba(255,255,255,0.9)" };
-          const onGrad: React.CSSProperties = { ...inp, background: "rgba(255,255,255,0.96)", boxShadow: "none", color: "#3A2428" };
+          const onGrad: React.CSSProperties = { ...inp, background: "rgba(255,255,255,0.96)", boxShadow: "none", color: "#1A2324" };
           return (
             <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {/* Search bar */}
@@ -1601,7 +1601,7 @@ export default function PriceCompare() {
                 <label style={white}>Check-out<input style={onGrad} type="date" value={c.checkOut} onChange={e => setCity(c.id, { checkOut: e.target.value })} /></label>
                 <label style={white}>Stars<select style={onGrad} value={c.stars} onChange={e => setCity(c.id, { stars: +e.target.value })}>{[5, 4, 3, 0].map(s => <option key={s} value={s}>{s ? `${s}★` : "Any"}</option>)}</select></label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button style={{ ...btn(), background: "#7A1F31", color: "#fff", boxShadow: "none", flex: 1, justifyContent: "center" }} disabled={busy || c.finding} onClick={() => searchAll(c)} title="Your hotels: every site's price. Plus other hotels in the city.">
+                  <button style={{ ...btn(), background: "#0A3436", color: "#fff", boxShadow: "none", flex: 1, justifyContent: "center" }} disabled={busy || c.finding} onClick={() => searchAll(c)} title="Your hotels: every site's price. Plus other hotels in the city.">
                     {busy || c.finding ? <Loader2 className="animate-spin" style={{ width: 15, height: 15 }} /> : <Search style={{ width: 15, height: 15 }} />} Search
                   </button>
                   {trip.cities.length > 1 && <button title="Remove city" style={{ ...btn(), background: "transparent", color: "#fff", boxShadow: "none", border: "1px solid rgba(255,255,255,0.5)", padding: "10px 11px" }} onClick={() => { setT({ cities: trip.cities.filter(x => x.id !== c.id) }); setCityTab(""); }}><X style={{ width: 15, height: 15 }} /></button>}

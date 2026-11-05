@@ -13,7 +13,7 @@ import ReactMarkdown from "react-markdown";
 // ── API ──────────────────────────────────────────────────────────────────────
 const API = "https://fintech-dashboard-61vh.onrender.com/api";
 
-// ── Mock BusinessOS Data ─────────────────────────────────────────────────────
+// ── Mock Custom Holidays Data ─────────────────────────────────────────────────────
 const MOCK_CLIENTS = [
   { id: "c1", name: "Rahul Sharma",   email: "rahul@email.com",   phone: "+91 98765 43210" },
   { id: "c2", name: "Priya Mehta",    email: "priya@email.com",   phone: "+91 87654 32109" },
@@ -438,7 +438,7 @@ Make it professional, engaging and ready to use.`;
   }
 }
 
-// ── BusinessOS Data Preview ───────────────────────────────────────────────────
+// ── Custom Holidays Data Preview ───────────────────────────────────────────────────
 function DataPreview({ fields }: { fields: Record<string, string> }) {
   const trip = MOCK_TRIPS.find(t => t.id === fields.trip);
   const client = MOCK_CLIENTS.find(c => c.id === fields.client);
@@ -460,7 +460,7 @@ function DataPreview({ fields }: { fields: Record<string, string> }) {
   return (
     <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
-      <p className="text-[11px] font-semibold text-primary">BusinessOS Data</p>
+      <p className="text-[11px] font-semibold text-primary">Custom Holidays Data</p>
       <div className="divide-y divide-border/50">
         {rows.map(([key, val]) => (
           <div key={key} className="flex items-start gap-2 py-1.5">
@@ -612,7 +612,7 @@ export default function Content() {
               <p className="text-xs font-semibold text-muted-foreground">Content Source</p>
               <div className="space-y-2">
                 {[
-                  { val: true,  icon: Database, label: "Use BusinessOS Data",  sub: "Auto-fill from trips & clients" },
+                  { val: true,  icon: Database, label: "Use Custom Holidays Data",  sub: "Auto-fill from trips & clients" },
                   { val: false, icon: PenLine,  label: "Write from Scratch",   sub: "Manual input only" },
                 ].map(opt => (
                   <button key={String(opt.val)} onClick={() => setUseBusinessData(opt.val)}

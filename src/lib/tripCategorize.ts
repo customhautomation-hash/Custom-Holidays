@@ -21,11 +21,11 @@ export interface Category {
 }
 
 export const CATEGORIES: Category[] = [
-  { id: "flights",   folder: "Flight Tickets",      label: "Flight Tickets",      hint: "E-tickets, fare rules, boarding passes",   color: "#B23A4E" },
+  { id: "flights",   folder: "Flight Tickets",      label: "Flight Tickets",      hint: "E-tickets, fare rules, boarding passes",   color: "#1F6F72" },
   { id: "hotels",    folder: "Hotel Vouchers",      label: "Hotel Vouchers",      hint: "Hotel / apartment / resort vouchers",       color: "#E0884A" },
   { id: "transfers", folder: "Transfers and Tours", label: "Transfers and Tours", hint: "Transfers, trains, tours, passes, tickets", color: "#3FAE82" },
-  { id: "documents", folder: "Documents",           label: "Documents",           hint: "Passports, visas, insurance",               color: "#A8475C" },
-  { id: "main",      folder: "",                    label: "Main Folder",         hint: "Itinerary, costing sheet, land arrangements", color: "#B23A4E" },
+  { id: "documents", folder: "Documents",           label: "Documents",           hint: "Passports, visas, insurance",               color: "#2C6D70" },
+  { id: "main",      folder: "",                    label: "Main Folder",         hint: "Itinerary, costing sheet, land arrangements", color: "#1F6F72" },
 ];
 
 export const categoryById = (id: CategoryId) => CATEGORIES.find(c => c.id === id)!;

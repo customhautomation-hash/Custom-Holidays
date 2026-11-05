@@ -97,7 +97,7 @@ function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string }> = {
     draft: { label: "Draft", cls: "bg-gray-100 text-gray-600" },
     generated: { label: "Generated", cls: "bg-blue-50 text-blue-600" },
-    reviewed: { label: "Reviewed", cls: "bg-rose-50 text-rose-600" },
+    reviewed: { label: "Reviewed", cls: "bg-teal-50 text-teal-600" },
     sent: { label: "Sent", cls: "bg-amber-50 text-amber-600" },
     approved: { label: "Approved", cls: "bg-green-50 text-green-600" },
     cancelled: { label: "Cancelled", cls: "bg-red-50 text-red-500" },
@@ -786,7 +786,7 @@ function DayCard({ day }: { day: DayPlan }) {
   };
   const itemColors: Record<string, string> = {
     hotel: "bg-blue-50 text-blue-600", activity: "bg-emerald-50 text-emerald-600",
-    transfer: "bg-amber-50 text-amber-600", note: "bg-gray-50 text-gray-500", free: "bg-rose-50 text-rose-600",
+    transfer: "bg-amber-50 text-amber-600", note: "bg-gray-50 text-gray-500", free: "bg-teal-50 text-teal-600",
   };
   return (
     <div className="rounded-xl border bg-background overflow-hidden">

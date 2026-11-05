@@ -358,11 +358,11 @@ const CHIP_COLORS: Record<string, string> = {
   blue:   "bg-blue-50   text-blue-600   border-blue-200   data-[active=true]:bg-blue-500   data-[active=true]:text-white data-[active=true]:border-blue-500",
   orange: "bg-orange-50 text-orange-600 border-orange-200 data-[active=true]:bg-orange-500 data-[active=true]:text-white data-[active=true]:border-orange-500",
   yellow: "bg-yellow-50 text-yellow-600 border-yellow-200 data-[active=true]:bg-yellow-500 data-[active=true]:text-white data-[active=true]:border-yellow-500",
-  purple: "bg-rose-50 text-rose-600 border-rose-200 data-[active=true]:bg-rose-500 data-[active=true]:text-white data-[active=true]:border-rose-500",
+  purple: "bg-teal-50 text-teal-600 border-teal-200 data-[active=true]:bg-teal-500 data-[active=true]:text-white data-[active=true]:border-teal-500",
   green:  "bg-green-50  text-green-600  border-green-200  data-[active=true]:bg-green-500  data-[active=true]:text-white data-[active=true]:border-green-500",
   red:    "bg-red-50    text-red-500    border-red-200    data-[active=true]:bg-red-500    data-[active=true]:text-white data-[active=true]:border-red-500",
   slate:  "bg-slate-50  text-slate-600  border-slate-200  data-[active=true]:bg-slate-600  data-[active=true]:text-white data-[active=true]:border-slate-600",
-  indigo: "bg-rose-50 text-rose-600 border-rose-200 data-[active=true]:bg-rose-500 data-[active=true]:text-white data-[active=true]:border-rose-500",
+  indigo: "bg-teal-50 text-teal-600 border-teal-200 data-[active=true]:bg-teal-500 data-[active=true]:text-white data-[active=true]:border-teal-500",
   teal:   "bg-teal-50   text-teal-600   border-teal-200   data-[active=true]:bg-teal-500   data-[active=true]:text-white data-[active=true]:border-teal-500",
 };
 
@@ -733,7 +733,7 @@ const Leads = () => {
             </Button>
 
             <Button variant="outline" size="sm"
-              className="gap-1.5 h-8 text-xs sm:h-9 sm:text-sm border-rose-200 text-rose-600 hover:bg-rose-50"
+              className="gap-1.5 h-8 text-xs sm:h-9 sm:text-sm border-teal-200 text-teal-600 hover:bg-teal-50"
               onClick={() => { setNewLead({ ...EMPTY_LEAD }); setScanError(null); setScanSuccess(false); setScannedPreview(null); setShowScanModal(true); }}
               disabled={scanning}>
               {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
@@ -792,13 +792,13 @@ const Leads = () => {
                 ref={filterBtnRef}
                 variant="outline"
                 size="sm"
-                className={`gap-1.5 h-9 text-sm relative ${activeFilterCount > 0 ? "border-rose-400 text-rose-600 bg-rose-50" : ""}`}
+                className={`gap-1.5 h-9 text-sm relative ${activeFilterCount > 0 ? "border-teal-400 text-teal-600 bg-teal-50" : ""}`}
                 onClick={() => setShowFilters(v => !v)}
               >
                 <Filter className="h-3.5 w-3.5" />
                 Filters
                 {activeFilterCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-500 text-white text-[11px] font-semibold flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-teal-500 text-white text-[11px] font-semibold flex items-center justify-center">
                     {activeFilterCount}
                   </span>
                 )}
@@ -923,7 +923,7 @@ const Leads = () => {
                               <div
                                 onClick={() => setFilters(f => ({ ...f, [key]: !f[key as keyof typeof f] }))}
                                 className={`relative h-5 w-9 rounded-full transition-colors cursor-pointer ${
-                                  filters[key as keyof typeof filters] ? "bg-rose-500" : "bg-muted border border-border"
+                                  filters[key as keyof typeof filters] ? "bg-teal-500" : "bg-muted border border-border"
                                 }`}
                               >
                                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
@@ -1136,24 +1136,24 @@ const Leads = () => {
               className="bg-card rounded-t-2xl sm:rounded-xl border shadow-elevated w-full sm:max-w-sm p-6">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
-                  <ScanLine className="h-4 w-4 text-rose-500" />
+                  <ScanLine className="h-4 w-4 text-teal-500" />
                   <h2 className="font-serif text-lg text-card-foreground">Scan Visiting Card</h2>
                 </div>
                 <button onClick={() => setShowScanModal(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
               </div>
               <p className="text-sm text-muted-foreground mb-5 text-center">
                 Take a photo or upload a visiting card image.<br />
-                <span className="text-rose-500 font-medium">Free OCR</span> will auto-fill all contact details.
+                <span className="text-teal-500 font-medium">Free OCR</span> will auto-fill all contact details.
               </p>
-              <div className="rounded-xl border-2 border-dashed border-rose-200 bg-rose-50/50 p-6 flex flex-col items-center gap-2 mb-5">
-                <div className="h-12 w-12 rounded-xl bg-rose-100 flex items-center justify-center">
-                  <ScanLine className="h-6 w-6 text-rose-500" />
+              <div className="rounded-xl border-2 border-dashed border-teal-200 bg-teal-50/50 p-6 flex flex-col items-center gap-2 mb-5">
+                <div className="h-12 w-12 rounded-xl bg-teal-100 flex items-center justify-center">
+                  <ScanLine className="h-6 w-6 text-teal-500" />
                 </div>
                 <p className="text-xs text-muted-foreground text-center">Extracts: Name, Email, Phone, Company,<br />Designation &amp; Website automatically</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => cameraRef.current?.click()}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors">
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-teal-200 bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors">
                   <Camera className="h-5 w-5" /><span className="text-xs font-medium">Take Photo</span>
                 </button>
                 <button onClick={() => cardRef.current?.click()}
@@ -1184,8 +1184,8 @@ const Leads = () => {
               {scanning && (
                 <div className="flex flex-col items-center py-8 gap-4">
                   <div className="relative">
-                    <div className="h-16 w-16 rounded-full border-4 border-rose-100 border-t-violet-500 animate-spin" />
-                    <ScanLine className="h-6 w-6 text-rose-500 absolute inset-0 m-auto" />
+                    <div className="h-16 w-16 rounded-full border-4 border-teal-100 border-t-violet-500 animate-spin" />
+                    <ScanLine className="h-6 w-6 text-teal-500 absolute inset-0 m-auto" />
                   </div>
                   <p className="text-sm font-medium text-card-foreground text-center">Reading card…</p>
                   {scannedPreview && <img src={scannedPreview} alt="Card" className="w-full max-h-28 object-cover rounded-lg border" />}
@@ -1213,10 +1213,10 @@ const Leads = () => {
                     <div className="mb-3 rounded-lg overflow-hidden border border-border">
                       <img src={scannedPreview} alt="Scanned card" className="w-full max-h-32 object-cover" />
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/30">
-                        <ScanLine className="h-3 w-3 text-rose-500" />
+                        <ScanLine className="h-3 w-3 text-teal-500" />
                         <span className="text-xs text-muted-foreground">Scanned with OCR.space</span>
                         <button onClick={() => { setShowAddModal(false); setShowScanModal(true); }}
-                          className="ml-auto text-xs text-rose-500 hover:underline flex items-center gap-1">
+                          className="ml-auto text-xs text-teal-500 hover:underline flex items-center gap-1">
                           <Camera className="h-3 w-3" /> Rescan
                         </button>
                       </div>

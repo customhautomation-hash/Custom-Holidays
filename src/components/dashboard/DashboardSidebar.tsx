@@ -39,7 +39,7 @@ function NavRow({ item, t }: { item: Item; t: Theme }) {
     <SidebarMenuItem>
       <SidebarMenuButton asChild>
         <NavLink to={item.url} end
-          className="flex items-center gap-2.5 h-8 px-2.5 rounded-[8px] text-[13px] transition-colors hover:bg-black/[0.04]"
+          className="flex items-center gap-2.5 h-8 px-2.5 rounded-[8px] text-[13px] transition-colors hover:bg-white/[0.06]"
           style={{ color: t.TEXT_MUTED }}
           activeClassName=""
           activeStyle={{ color: t.ACCENT, background: t.BG, boxShadow: t.SHADOW_IN, fontWeight: 500 }}>
@@ -91,18 +91,19 @@ export function DashboardSidebar() {
   const { dark } = useDarkMode();
 
   // ── Theme tokens ──────────────────────────────────────────────────────────
+  // CH Connect palette: deep teal sidebar, gold accents
   const t: Theme = {
-    BG:         dark ? "#241418" : "#F3EAEA",
+    BG:         dark ? "#072A2C" : "#0B3B3D",
     SHADOW_IN:  dark
-      ? "inset 2px 2px 5px #120A0C, inset -2px -2px 5px #352027"
-      : "inset 2px 2px 5px #D9C6C8, inset -2px -2px 5px #FFFFFF",
+      ? "inset 2px 2px 5px #031516, inset -2px -2px 5px #0D3D40"
+      : "inset 2px 2px 5px #062426, inset -2px -2px 5px #115254",
     SHADOW_OUT: dark
-      ? "3px 3px 7px #120A0C, -3px -3px 7px #352027"
-      : "3px 3px 7px #D9C6C8, -3px -3px 7px #FFFFFF",
-    TEXT_MAIN:  dark ? "#F0D8DC" : "#3A2428",
-    TEXT_MUTED: dark ? "#A07A82" : "#8A7275",
-    ACCENT:     dark ? "#E8A0AC" : "#9B2C3F",
-    HAIRLINE:   dark ? "rgba(240,216,220,0.10)" : "rgba(58,36,40,0.10)",
+      ? "3px 3px 7px #031516, -3px -3px 7px #0D3D40"
+      : "3px 3px 7px #062426, -3px -3px 7px #115254",
+    TEXT_MAIN:  "#F6F4EE",
+    TEXT_MUTED: "#C9D8D7",
+    ACCENT:     "#D4AF5A",
+    HAIRLINE:   "rgba(212,175,90,0.22)",
   };
   const HAIRLINE = t.HAIRLINE;
 
@@ -115,12 +116,12 @@ export function DashboardSidebar() {
       {/* Logo */}
       <SidebarHeader className="px-4 pt-5 pb-4 border-b-0" style={{ background: t.BG }}>
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-[10px] flex items-center justify-center shrink-0 font-serif text-base text-white"
-            style={{ background: "#9B2C3F" }}>
-            B
+          <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-serif text-[14px] font-bold"
+            style={{ border: "1.5px solid #D4AF5A", color: "#D4AF5A" }}>
+            CH
           </div>
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-tight" style={{ color: t.TEXT_MAIN }}>BusinessOS</h2>
+            <h2 className="font-serif text-[18px] font-semibold leading-tight" style={{ color: t.TEXT_MAIN }}>Custom Holidays</h2>
             <p className="text-xs leading-tight" style={{ color: t.TEXT_MUTED }}>Dashboard</p>
           </div>
         </div>
@@ -187,7 +188,7 @@ export function DashboardSidebar() {
         {user && (
           <>
             <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium"
-              style={{ background: dark ? "#352027" : "#E6D5D7", color: t.TEXT_MAIN }}>
+              style={{ border: "1.5px solid #D4AF5A", color: "#D4AF5A", fontWeight: 600 }}>
               {(profile?.full_name || user.email || "U")[0].toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
@@ -201,7 +202,7 @@ export function DashboardSidebar() {
           </>
         )}
         <button onClick={handleSignOut} title="Sign out"
-          className="h-8 w-8 flex items-center justify-center rounded-[10px] shrink-0 transition-colors hover:bg-black/5"
+          className="h-8 w-8 flex items-center justify-center rounded-[10px] shrink-0 transition-colors hover:bg-white/10"
           style={{ color: t.TEXT_MUTED, background: "none", border: "none", cursor: "pointer" }}>
           <LogOut className="h-4 w-4" strokeWidth={1.5} />
         </button>

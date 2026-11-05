@@ -37,7 +37,7 @@ function getInitials(name?: string | null, email?: string | null): string {
 }
 
 const typeStyles = {
-  info:    { icon: <Info style={{ width: 13, height: 13 }} />,        bg: "#F8EDEF", color: "#8A2436" },
+  info:    { icon: <Info style={{ width: 13, height: 13 }} />,        bg: "#EAF2F1", color: "#0B3B3D" },
   success: { icon: <CheckCheck style={{ width: 13, height: 13 }} />,  bg: "#EEFAF4", color: "#2E9E6B" },
   warning: { icon: <AlertTriangle style={{ width: 13, height: 13 }} />, bg: "#FEF6EB", color: "#D48A2E" },
 };
@@ -53,16 +53,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { dark, toggle: toggleDark } = useDarkMode();
 
   // ── Theme tokens ──────────────────────────────────────────────────────────
-  const BG           = dark ? "#241418" : "#F3EAEA";
+  const BG           = dark ? "#0C2C32" : "#F3EAEA";
   const SHADOW_OUT   = dark
-    ? "5px 5px 12px #120A0C, -5px -5px 12px #352027"
+    ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A"
     : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
-  const TEXT_MUTED   = dark ? "#A07A82" : "#9A8285";
-  const TEXT_MAIN    = dark ? "#F0D8DC" : "#3A2428";
-  const BORDER       = dark ? "#3A232B" : "#E4D3D5";
-  const PANEL_BG     = dark ? "#2B181D" : "#F3EAEA";
+  const TEXT_MUTED   = dark ? "#8FA6A3" : "#5B6766";
+  const TEXT_MAIN    = dark ? "#E6EFEC" : "#1A2324";
+  const BORDER       = dark ? "#1E3E44" : "#E4D3D5";
+  const PANEL_BG     = dark ? "#10343A" : "#F3EAEA";
   const PANEL_SHADOW = dark
-    ? "8px 8px 20px #120A0C, -8px -8px 20px #352027"
+    ? "8px 8px 20px #061A1E, -8px -8px 20px #16434A"
     : "8px 8px 20px #D3C0C2, -8px -8px 20px #FFFFFF";
 
   const initials    = getInitials(profile?.full_name, user?.email);
@@ -132,7 +132,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 ...btnStyle,
                 ...(notifOpen ? {
                   boxShadow: dark
-                    ? "inset 2px 2px 5px #120A0C, inset -2px -2px 5px #352027"
+                    ? "inset 2px 2px 5px #061A1E, inset -2px -2px 5px #16434A"
                     : "inset 2px 2px 5px #D9C6C8, inset -2px -2px 5px #FFFFFF"
                 } : {}),
               }}
@@ -162,14 +162,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <span style={{ fontWeight: 600, fontSize: 14, color: TEXT_MAIN }}>Notifications</span>
                     {unreadCount > 0 && (
                       <span style={{
-                        background: "#9B2C3F",
+                        background: "#13585B",
                         color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 600, padding: "1px 7px",
                       }}>{unreadCount}</span>
                     )}
                   </div>
                   {unreadCount > 0 && (
                     <button onClick={markAllRead} style={{
-                      fontSize: 11, color: "#B23A4E", fontWeight: 600,
+                      fontSize: 11, color: "#1F6F72", fontWeight: 600,
                       background: "none", border: "none", cursor: "pointer", padding: 0,
                     }}>Mark all read</button>
                   )}
@@ -186,7 +186,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       <div key={n.id} onClick={() => markRead(n.id)} style={{
                         display: "flex", alignItems: "flex-start", gap: 10,
                         padding: "10px 14px", cursor: "pointer",
-                        background: n.read ? "transparent" : "rgba(178,58,78,0.06)",
+                        background: n.read ? "transparent" : "rgba(20,100,110,0.06)",
                       }}>
                         <div style={{
                           width: 28, height: 28, borderRadius: 8, background: ts.bg,
@@ -199,7 +199,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                               {n.title}
                             </span>
                             {!n.read && (
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B23A4E", flexShrink: 0 }} />
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1F6F72", flexShrink: 0 }} />
                             )}
                           </div>
                           <p style={{ margin: 0, fontSize: 11.5, color: TEXT_MUTED, lineHeight: 1.4 }}>{n.message}</p>
@@ -223,7 +223,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             onClick={() => navigate("/profile")}
             style={{
               width: 36, height: 36, borderRadius: 999,
-              background: dark ? "#352027" : "#E6D5D7",
+              background: dark ? "#16434A" : "#E6D5D7",
               display: "flex", alignItems: "center",
               justifyContent: "center", fontSize: 12, fontWeight: 500, color: TEXT_MAIN,
               cursor: "pointer", flexShrink: 0, userSelect: "none", transition: "opacity 0.15s",

@@ -52,7 +52,7 @@ const initialCategories: Category[] = [
   },
   {
     name: "Web & Content", icon: <Globe className="h-4 w-4" />,
-    color: "text-rose-400", bgColor: "bg-rose-500/10 border-rose-500/20",
+    color: "text-teal-400", bgColor: "bg-teal-500/10 border-teal-500/20",
     automations: [
       { id: 11, name: "Weekly SEO & Traffic Digest",       trigger: "not-built", remarks: "After website launch", status: "idle", lastLog: [] },
       { id: 12, name: "Competitor Price Monitor",          trigger: "not-built", remarks: "After website launch", status: "idle", lastLog: [] },
@@ -101,7 +101,7 @@ const initialCategories: Category[] = [
   },
   {
     name: "Revenue", icon: <TrendingUp className="h-4 w-4" />,
-    color: "text-rose-400", bgColor: "bg-rose-500/10 border-rose-500/20",
+    color: "text-teal-400", bgColor: "bg-teal-500/10 border-teal-500/20",
     automations: [
       { id: 50, name: "Year-End Client Report Mailer", trigger: "not-built", remarks: "To create", status: "idle", lastLog: [] },
     ],

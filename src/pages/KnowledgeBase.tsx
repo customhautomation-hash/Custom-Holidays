@@ -342,7 +342,7 @@ function OverviewPanel() {
             { label: "Hotels added",    value: latest.hotels_added || 0,      cls: "text-blue-600" },
             { label: "Activities",      value: latest.activities_added || 0,  cls: "text-emerald-600" },
             { label: "Transfers",       value: latest.transfers_added || 0,   cls: "text-amber-600" },
-            { label: "Suppliers found", value: latest.suppliers_created || 0, cls: "text-rose-600" },
+            { label: "Suppliers found", value: latest.suppliers_created || 0, cls: "text-teal-600" },
           ].map(s => (
             <div key={s.label} className="rounded-xl border bg-card p-4 text-center">
               <p className={`text-2xl font-semibold ${s.cls}`}>{s.value}</p>
@@ -424,7 +424,7 @@ function OverviewPanel() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { icon: <Users className="h-5 w-5" />, title: "Suppliers", desc: "All suppliers extracted from Gmail", path: "/suppliers", color: "text-blue-600 bg-blue-50" },
-          { icon: <Mail className="h-5 w-5" />,  title: "Supplier Reachout", desc: "Send bulk outreach to your suppliers", path: "/supplier-reachout", color: "text-rose-600 bg-rose-50" },
+          { icon: <Mail className="h-5 w-5" />,  title: "Supplier Reachout", desc: "Send bulk outreach to your suppliers", path: "/supplier-reachout", color: "text-teal-600 bg-teal-50" },
           { icon: <Handshake className="h-5 w-5" />, title: "Active Deals", desc: "Track ongoing deals with suppliers", path: "/active-deals", color: "text-emerald-600 bg-emerald-50" },
         ].map(item => (
           <button key={item.path} onClick={() => window.location.href = item.path}

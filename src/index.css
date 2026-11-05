@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -18,47 +18,47 @@
 
     /* ── Semantic tokens ── */
     --background: 0 30% 93%;
-    --foreground: 350 23% 18%;
+    --foreground: 186 15% 12%;
     --card: 0 30% 94%;
-    --card-foreground: 350 23% 18%;
+    --card-foreground: 186 15% 12%;
     --popover: 0 30% 94%;
-    --popover-foreground: 350 23% 18%;
-    --primary: 350 56% 39%;
+    --popover-foreground: 186 15% 12%;
+    --primary: 182 65% 21%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 22% 89%;
-    --secondary-foreground: 350 23% 18%;
+    --secondary-foreground: 186 15% 12%;
     --muted: 0 18% 88%;
-    --muted-foreground: 352 9% 56%;
-    --accent: 350 56% 39%;
+    --muted-foreground: 174 6% 38%;
+    --accent: 41 50% 48%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 0 18% 85%;
     --input: 0 22% 90%;
-    --ring: 350 56% 39%;
+    --ring: 182 65% 21%;
     --radius: 1rem;
 
     /* ── Sidebar ── */
-    --sidebar-background: 0 30% 93%;
-    --sidebar-foreground: 350 15% 40%;
-    --sidebar-primary: 350 56% 39%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 22% 88%;
-    --sidebar-accent-foreground: 350 23% 18%;
-    --sidebar-border: 0 18% 85%;
-    --sidebar-ring: 350 56% 39%;
+    --sidebar-background: 182 69% 14%;
+    --sidebar-foreground: 40 30% 92%;
+    --sidebar-primary: 42 58% 59%;
+    --sidebar-primary-foreground: 182 69% 14%;
+    --sidebar-accent: 182 55% 18%;
+    --sidebar-accent-foreground: 40 50% 94%;
+    --sidebar-border: 182 50% 20%;
+    --sidebar-ring: 42 58% 59%;
 
     /* ── Status ── */
     --success: 152 56% 46%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 240 25% 15%;
-    --info: 350 56% 39%;
+    --info: 182 65% 21%;
     --info-foreground: 0 0% 100%;
 
     /* ── Charts ── */
-    --chart-1: 350 56% 39%;
-    --chart-2: 280 50% 65%;
+    --chart-1: 182 65% 21%;
+    --chart-2: 42 58% 59%;
     --chart-3: 152 56% 46%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 72% 60%;
@@ -70,45 +70,45 @@
   ══════════════════════════════════════════ */
   .dark {
     /* ── Neumorphic dark base ── */
-    --neu-base:      #241418;
-    --neu-light:     #352027;
-    --neu-dark:      #120A0C;
-    --neu-shadow:    6px 6px 14px #120A0C, -6px -6px 14px #352027;
-    --neu-shadow-sm: 3px 3px 8px  #120A0C, -3px -3px 8px  #352027;
-    --neu-shadow-lg: 10px 10px 24px #0F0809, -10px -10px 24px #33202A;
-    --neu-inset:     inset 4px 4px 10px #120A0C, inset -4px -4px 10px #352027;
-    --neu-inset-sm:  inset 2px 2px 6px  #120A0C, inset -2px -2px 6px  #352027;
+    --neu-base:      #0C2C32;
+    --neu-light:     #16434A;
+    --neu-dark:      #061A1E;
+    --neu-shadow:    6px 6px 14px #061A1E, -6px -6px 14px #16434A;
+    --neu-shadow-sm: 3px 3px 8px  #061A1E, -3px -3px 8px  #16434A;
+    --neu-shadow-lg: 10px 10px 24px #04161A, -10px -10px 24px #15404A;
+    --neu-inset:     inset 4px 4px 10px #061A1E, inset -4px -4px 10px #16434A;
+    --neu-inset-sm:  inset 2px 2px 6px  #061A1E, inset -2px -2px 6px  #16434A;
 
     /* ── Semantic tokens ── */
-    --background: 345 27% 11%;
-    --foreground: 350 40% 90%;
-    --card: 345 25% 13%;
-    --card-foreground: 350 40% 90%;
-    --popover: 345 25% 13%;
-    --popover-foreground: 350 40% 90%;
-    --primary: 350 56% 39%;
+    --background: 189 61% 12%;
+    --foreground: 160 20% 92%;
+    --card: 190 55% 14%;
+    --card-foreground: 160 20% 92%;
+    --popover: 190 55% 14%;
+    --popover-foreground: 160 20% 92%;
+    --primary: 182 50% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 345 25% 18%;
-    --secondary-foreground: 350 40% 90%;
-    --muted: 345 25% 16%;
-    --muted-foreground: 350 14% 58%;
-    --accent: 350 56% 39%;
-    --accent-foreground: 0 0% 100%;
+    --secondary: 190 45% 18%;
+    --secondary-foreground: 160 20% 92%;
+    --muted: 190 45% 16%;
+    --muted-foreground: 170 10% 62%;
+    --accent: 42 58% 59%;
+    --accent-foreground: 182 69% 10%;
     --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 345 20% 22%;
-    --input: 345 25% 16%;
-    --ring: 350 56% 39%;
+    --border: 190 35% 22%;
+    --input: 190 45% 16%;
+    --ring: 182 50% 36%;
 
     /* ── Sidebar ── */
-    --sidebar-background: 345 27% 11%;
-    --sidebar-foreground: 350 15% 62%;
-    --sidebar-primary: 350 56% 39%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 345 25% 18%;
-    --sidebar-accent-foreground: 350 40% 90%;
-    --sidebar-border: 345 20% 22%;
-    --sidebar-ring: 350 56% 39%;
+    --sidebar-background: 182 69% 9%;
+    --sidebar-foreground: 40 30% 85%;
+    --sidebar-primary: 42 58% 59%;
+    --sidebar-primary-foreground: 190 65% 12%;
+    --sidebar-accent: 190 50% 16%;
+    --sidebar-accent-foreground: 40 50% 94%;
+    --sidebar-border: 190 45% 18%;
+    --sidebar-ring: 42 58% 59%;
   }
 }
 
@@ -124,14 +124,14 @@
     letter-spacing: -0.005em;
   }
   /* page titles: elegant serif, like the Custom Holidays brochures */
-  h1, .font-serif { font-family: 'Newsreader', 'DM Serif Display', Georgia, serif !important; font-weight: 500; letter-spacing: -0.01em; }
+  h1, .font-serif { font-family: 'Playfair Display', 'Newsreader', 'DM Serif Display', Georgia, serif !important; font-weight: 500; letter-spacing: -0.01em; }
 
   /* ── Dark mode: override ALL hardcoded neumorphic inline styles ── */
   /* This catches every page that uses background: #F3EAEA inline */
   .dark [style*="background: #F3EAEA"],
   .dark [style*="background:#F3EAEA"],
   .dark [style*='background: "#F3EAEA"'] {
-    background: #241418 !important;
+    background: #0C2C32 !important;
   }
 
   /* Cards / panels that use bg-card Tailwind class */
@@ -158,7 +158,7 @@
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: var(--neu-base); }
   ::-webkit-scrollbar-thumb { background: var(--neu-dark); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #9A8285; }
+  ::-webkit-scrollbar-thumb:hover { background: #5B6766; }
 }
 
 @layer components {
@@ -217,7 +217,7 @@
   }
 
   .neu-btn-accent {
-    background: linear-gradient(135deg, #B23A4E, #8A2436);
+    background: linear-gradient(135deg, #1F6F72, #0B3B3D);
     box-shadow: 3px 3px 8px rgba(138, 36, 54, 0.4), -2px -2px 6px rgba(255,255,255,0.1);
     border-radius: 0.75rem;
     border: none;
@@ -232,21 +232,21 @@
   }
 
   .neu-btn-accent:active {
-    box-shadow: inset 2px 2px 6px #6E1A2A, inset -2px -2px 4px #C9566A;
+    box-shadow: inset 2px 2px 6px #072A2C, inset -2px -2px 4px #2A7C80;
     transform: scale(0.98);
   }
 
   /* ── Text styles ── */
-  .text-neu-primary  { color: #3A2428; }
-  .dark .text-neu-primary { color: #F0D8DC; }
+  .text-neu-primary  { color: #1A2324; }
+  .dark .text-neu-primary { color: #E6EFEC; }
 
-  .text-neu-muted    { color: #9A8285; }
-  .dark .text-neu-muted { color: #A07A82; }
+  .text-neu-muted    { color: #5B6766; }
+  .dark .text-neu-muted { color: #8FA6A3; }
 
-  .text-neu-accent   { color: #9B2C3F; }
+  .text-neu-accent   { color: #13585B; }
 
   /* ── Accent gradient ── */
-  .bg-neu-accent { background: linear-gradient(135deg, #B23A4E, #8A2436); }
+  .bg-neu-accent { background: linear-gradient(135deg, #1F6F72, #0B3B3D); }
 
   /* ── Sidebar-specific ── */
   .sidebar-neu {
@@ -258,10 +258,10 @@
   .neu *, .neu-sm *, .neu-lg *, .neu-inset * { border-color: transparent; }
 
   /* ── Legacy compat ── */
-  .bg-gradient-gold  { background: linear-gradient(135deg, #B23A4E, #8A2436); }
+  .bg-gradient-gold  { background: linear-gradient(135deg, #1F6F72, #0B3B3D); }
 
   .text-gradient-gold {
-    background: linear-gradient(135deg, #B23A4E, #8A2436);
+    background: linear-gradient(135deg, #1F6F72, #0B3B3D);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

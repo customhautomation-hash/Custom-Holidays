@@ -55,7 +55,7 @@ interface Trip {
 const TRIP_STATUS_META: Record<string, { label: string; color: string; bg: string; icon: typeof Circle }> = {
   Complete:    { label: "Complete",    color: "text-green-600",  bg: "bg-green-100",  icon: CheckCircle2 },
   Confirmed:   { label: "Confirmed",   color: "text-blue-600",   bg: "bg-blue-100",   icon: CheckCircle2 },
-  Ongoing:     { label: "Ongoing",     color: "text-rose-600", bg: "bg-rose-100", icon: TrendingUp   },
+  Ongoing:     { label: "Ongoing",     color: "text-teal-600", bg: "bg-teal-100", icon: TrendingUp   },
   Enquiry:     { label: "Enquiry",     color: "text-amber-600",  bg: "bg-amber-100",  icon: Circle       },
   Cancelled:   { label: "Cancelled",   color: "text-red-500",    bg: "bg-red-100",    icon: AlertCircle  },
   default:     { label: "Active",      color: "text-slate-600",  bg: "bg-slate-100",  icon: Circle       },
@@ -65,15 +65,15 @@ const STAGE_META: Record<string, { color: string; bg: string }> = {
   New:       { color: "text-blue-600",   bg: "bg-blue-100"   },
   new:       { color: "text-blue-600",   bg: "bg-blue-100"   },
   Contacted: { color: "text-amber-600",  bg: "bg-amber-100"  },
-  Qualified: { color: "text-rose-600", bg: "bg-rose-100" },
+  Qualified: { color: "text-teal-600", bg: "bg-teal-100" },
   Booked:    { color: "text-green-600",  bg: "bg-green-100"  },
   default:   { color: "text-slate-600",  bg: "bg-slate-100"  },
 };
 
 const GRADS = [
-  "from-rose-500 to-rose-600", "from-emerald-500 to-teal-600",
+  "from-teal-500 to-teal-600", "from-emerald-500 to-teal-600",
   "from-blue-500 to-cyan-600",     "from-orange-500 to-amber-600",
-  "from-rose-500 to-pink-600",     "from-rose-500 to-blue-600",
+  "from-teal-500 to-pink-600",     "from-teal-500 to-blue-600",
 ];
 const grad = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) & 0xffff; return GRADS[h % GRADS.length]; };
 const initials = (s: string) => s.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
@@ -198,19 +198,19 @@ function AddClientModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 
           <Field label="Full Name *">
             <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Rahul Sharma"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Contact Type">
               <select value={form.contact_type} onChange={e => set("contact_type", e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 transition-all">
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 transition-all">
                 {["Individual", "Corporate", "Group", "Family"].map(v => <option key={v}>{v}</option>)}
               </select>
             </Field>
             <Field label="Stage">
               <select value={form.stage} onChange={e => set("stage", e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 transition-all">
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 transition-all">
                 {["New", "Contacted", "Qualified", "Booked"].map(v => <option key={v}>{v}</option>)}
               </select>
             </Field>
@@ -218,22 +218,22 @@ function AddClientModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 
           <Field label="Email">
             <input type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="email@example.com"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Phone">
             <input value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Destination">
             <input value={form.destination} onChange={e => set("destination", e.target.value)} placeholder="e.g. Bali, Indonesia"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Budget">
             <input value={form.budget} onChange={e => set("budget", e.target.value)} placeholder="e.g. ₹2,00,000"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
         </div>
 
@@ -242,7 +242,7 @@ function AddClientModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-60">
+            className="px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-600 text-white text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-60">
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             Add Client
           </button>
@@ -317,11 +317,11 @@ function AddTripModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
           <div className="grid grid-cols-2 gap-3">
             <Field label="Trip ID">
               <input value={form.trip_id} onChange={e => set("trip_id", e.target.value)} placeholder="e.g. TR-001"
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
             </Field>
             <Field label="Status">
               <select value={form.status} onChange={e => set("status", e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 transition-all">
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 transition-all">
                 {["Enquiry", "Confirmed", "Ongoing", "Complete", "Cancelled"].map(v => <option key={v}>{v}</option>)}
               </select>
             </Field>
@@ -329,44 +329,44 @@ function AddTripModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 
           <Field label="Trip Name *">
             <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Europe Grand Tour"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Client">
             <input value={form.client} onChange={e => set("client", e.target.value)} placeholder="Client name"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Project Lead">
             <input value={form.project_lead} onChange={e => set("project_lead", e.target.value)} placeholder="Team member name"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Places">
             <input value={form.places} onChange={e => set("places", e.target.value)} placeholder="e.g. Paris, Rome, Barcelona"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start Date">
               <input type="date" value={form.start_date} onChange={e => set("start_date", e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 transition-all" />
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 transition-all" />
             </Field>
             <Field label="End Date">
               <input type="date" value={form.end_date} onChange={e => set("end_date", e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 transition-all" />
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 transition-all" />
             </Field>
           </div>
 
           <Field label="Budget">
             <input value={form.budget} onChange={e => set("budget", e.target.value)} placeholder="e.g. ₹5,00,000"
-              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
 
           <Field label="Description">
             <textarea value={form.description} onChange={e => set("description", e.target.value)} rows={3}
               placeholder="Trip details, notes, itinerary highlights…"
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
           </Field>
         </div>
 
@@ -375,7 +375,7 @@ function AddTripModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-60">
+            className="px-4 py-2 rounded-lg bg-teal-500 hover:bg-teal-600 text-white text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-60">
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             Add Project
           </button>
@@ -446,7 +446,7 @@ function ClientDrawer({
         className="fixed right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-2xl z-50 flex flex-col overflow-hidden"
       >
         <div className="px-5 py-4 border-b border-border flex items-center gap-3 shrink-0">
-          <div className={`h-11 w-11 rounded-full bg-[#8A5A63] flex items-center justify-center text-sm font-semibold text-white shrink-0`}>
+          <div className={`h-11 w-11 rounded-full bg-[#3E6B6C] flex items-center justify-center text-sm font-semibold text-white shrink-0`}>
             {initials(client.name)}
           </div>
           <div className="flex-1 min-w-0">
@@ -760,7 +760,7 @@ const ClientPMS = () => {
     { label: "Total Clients", value: clients.length,                                                  color: "text-card-foreground" },
     { label: "Active",        value: clients.filter(c => !["—"].includes(c.stage)).length,            color: "text-green-600"       },
     { label: "Total Spend",   value: currency(clients.reduce((s, c) => s + c.total_spend, 0)),        color: "text-amber-600"       },
-    { label: "With Bookings", value: clients.filter(c => c.trips_count > 0).length,                   color: "text-rose-600"      },
+    { label: "With Bookings", value: clients.filter(c => c.trips_count > 0).length,                   color: "text-teal-600"      },
   ];
 
   const tripStats = [
@@ -843,7 +843,7 @@ const ClientPMS = () => {
             </button>
             <button
               onClick={() => tab === "clients" ? setShowAddClient(true) : setShowAddTrip(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-medium transition-colors shadow-sm">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium transition-colors shadow-sm">
               <Plus className="h-3.5 w-3.5" />
               {tab === "clients" ? "Add Client" : "Add Project"}
             </button>
@@ -884,14 +884,14 @@ const ClientPMS = () => {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input placeholder="Search clients…" value={clientSearch} onChange={e => setClientSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+                  className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
               </div>
               <div className="flex gap-1 flex-wrap">
                 {allStages.map(s => (
                   <button key={s} onClick={() => setClientFilter(s)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                       clientFilter === s
-                        ? "bg-rose-500 text-white border-rose-500"
+                        ? "bg-teal-500 text-white border-teal-500"
                         : "border-border text-muted-foreground hover:bg-muted"
                     }`}>{s}</button>
                 ))}
@@ -915,7 +915,7 @@ const ClientPMS = () => {
                     <motion.div key={client.id}
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}
-                      className="relative text-left rounded-2xl border border-border bg-card p-4 hover:border-rose-300 hover:shadow-md transition-all group"
+                      className="relative text-left rounded-2xl border border-border bg-card p-4 hover:border-teal-300 hover:shadow-md transition-all group"
                     >
                       {/* Delete button on card */}
                       <button
@@ -926,7 +926,7 @@ const ClientPMS = () => {
 
                       <button className="w-full text-left" onClick={() => setSelectedClient(client)}>
                         <div className="flex items-start gap-3 mb-3 pr-6">
-                          <div className={`h-10 w-10 rounded-full bg-[#8A5A63] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>
+                          <div className={`h-10 w-10 rounded-full bg-[#3E6B6C] flex items-center justify-center text-[11px] font-semibold text-white shrink-0`}>
                             {initials(client.name)}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -967,7 +967,7 @@ const ClientPMS = () => {
                               </span>
                             )}
                           </div>
-                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-rose-500 transition-colors" />
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-teal-500 transition-colors" />
                         </div>
                       </button>
                     </motion.div>
@@ -997,7 +997,7 @@ const ClientPMS = () => {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input placeholder="Search trips, clients, IDs…" value={tripSearch} onChange={e => setTripSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-rose-400/30 focus:border-rose-400 transition-all" />
+                  className="w-full pl-9 pr-3 h-9 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 transition-all" />
               </div>
               <div className="flex gap-1 flex-wrap">
                 {allTripStatuses.map(s => {
@@ -1072,7 +1072,7 @@ const ClientPMS = () => {
                                   className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-all">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-rose-500 transition-colors" />
+                                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-teal-500 transition-colors" />
                               </div>
                             </td>
                           </motion.tr>

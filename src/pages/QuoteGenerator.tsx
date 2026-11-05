@@ -133,13 +133,13 @@ export default function QuoteGenerator() {
   const handlePrint = () => window.print();
 
   // ── Theme ─────────────────────────────────────────────────────────────────
-  const BG         = dark ? "#241418" : "#F3EAEA";
-  const SHADOW_OUT = dark ? "5px 5px 12px #120A0C, -5px -5px 12px #352027" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
-  const SHADOW_IN  = dark ? "inset 3px 3px 7px #120A0C, inset -3px -3px 7px #352027" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
-  const TEXT_MAIN  = dark ? "#F0D8DC" : "#3A2428";
-  const TEXT_MUTED = dark ? "#A07A82" : "#9A8285";
-  const BORDER     = dark ? "#3A232B" : "#E8DADB";
-  const CARD_BG    = dark ? "#2B181D" : "#F3EAEA";
+  const BG         = dark ? "#0C2C32" : "#F3EAEA";
+  const SHADOW_OUT = dark ? "5px 5px 12px #061A1E, -5px -5px 12px #16434A" : "5px 5px 12px #D9C6C8, -5px -5px 12px #FFFFFF";
+  const SHADOW_IN  = dark ? "inset 3px 3px 7px #061A1E, inset -3px -3px 7px #16434A" : "inset 3px 3px 7px #D9C6C8, inset -3px -3px 7px #FFFFFF";
+  const TEXT_MAIN  = dark ? "#E6EFEC" : "#1A2324";
+  const TEXT_MUTED = dark ? "#8FA6A3" : "#5B6766";
+  const BORDER     = dark ? "#1E3E44" : "#E8DADB";
+  const CARD_BG    = dark ? "#10343A" : "#F3EAEA";
 
   const card: React.CSSProperties  = { background: CARD_BG, borderRadius: 18, boxShadow: SHADOW_OUT, padding: 24, marginBottom: 20 };
   const input: React.CSSProperties = { background: BG, boxShadow: SHADOW_IN, borderRadius: 10, padding: "8px 12px", border: "none", outline: "none", fontSize: 13, color: TEXT_MAIN, fontFamily: "inherit", width: "100%" };
@@ -206,7 +206,7 @@ export default function QuoteGenerator() {
                 style={{
                   display: "flex", alignItems: "center", gap: 7,
                   padding: "9px 18px", borderRadius: 12, border: "none", cursor: "pointer",
-                  background: "#9B2C3F", color: "#fff",
+                  background: "#13585B", color: "#fff",
                   fontSize: 13, fontWeight: 600,
                 }}
               >
@@ -220,7 +220,7 @@ export default function QuoteGenerator() {
           <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
             <div>
               <p style={{ fontSize: 11, color: TEXT_MUTED, margin: "0 0 4px", fontWeight: 600, textTransform: "" }}>Quote Number</p>
-              <p style={{ fontSize: 22, fontWeight: 600, color: "#B23A4E", margin: 0 }}>{quoteNo}</p>
+              <p style={{ fontSize: 22, fontWeight: 600, color: "#1F6F72", margin: 0 }}>{quoteNo}</p>
             </div>
             <div style={{ textAlign: "right" }}>
               <p style={{ fontSize: 11, color: TEXT_MUTED, margin: "0 0 4px", fontWeight: 600, textTransform: "" }}>Date</p>
@@ -232,7 +232,7 @@ export default function QuoteGenerator() {
           {/* Client details */}
           <div style={card}>
             <p style={{ fontSize: 13, fontWeight: 600, color: TEXT_MAIN, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
-              <User style={{ width: 15, height: 15, color: "#B23A4E" }} /> Client Details
+              <User style={{ width: 15, height: 15, color: "#1F6F72" }} /> Client Details
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field lbl="Client Name">
@@ -265,7 +265,7 @@ export default function QuoteGenerator() {
           {/* Line items */}
           <div style={card}>
             <p style={{ fontSize: 13, fontWeight: 600, color: TEXT_MAIN, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
-              <FileText style={{ width: 15, height: 15, color: "#B23A4E" }} /> Package Items
+              <FileText style={{ width: 15, height: 15, color: "#1F6F72" }} /> Package Items
             </p>
 
             {/* Table header */}
@@ -315,7 +315,7 @@ export default function QuoteGenerator() {
               style={{
                 marginTop: 14, display: "flex", alignItems: "center", gap: 7,
                 background: BG, boxShadow: SHADOW_OUT, border: "none", borderRadius: 10,
-                padding: "8px 16px", cursor: "pointer", color: "#B23A4E", fontSize: 12, fontWeight: 600,
+                padding: "8px 16px", cursor: "pointer", color: "#1F6F72", fontSize: 12, fontWeight: 600,
               }}
             >
               <Plus style={{ width: 13, height: 13 }} /> Add Item
@@ -374,13 +374,13 @@ export default function QuoteGenerator() {
 
                 <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 15, fontWeight: 600, color: TEXT_MAIN }}>Total</span>
-                  <span style={{ fontSize: 22, fontWeight: 600, color: "#B23A4E" }}>{INR(total)}</span>
+                  <span style={{ fontSize: 22, fontWeight: 600, color: "#1F6F72" }}>{INR(total)}</span>
                 </div>
 
                 {client.pax > 0 && subtotal > 0 && (
-                  <div style={{ background: "rgba(178,58,78,0.08)", borderRadius: 10, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ background: "rgba(20,100,110,0.08)", borderRadius: 10, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, color: TEXT_MUTED }}>Per person ({client.pax} pax)</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#B23A4E" }}>{INR(total / client.pax)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1F6F72" }}>{INR(total / client.pax)}</span>
                   </div>
                 )}
               </div>
@@ -417,7 +417,7 @@ export default function QuoteGenerator() {
                 style={{
                   display: "flex", alignItems: "center", gap: 7,
                   padding: "10px 20px", borderRadius: 12, border: "none",
-                  background: "#9B2C3F",
+                  background: "#13585B",
                   color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
                 }}
               >
@@ -430,21 +430,21 @@ export default function QuoteGenerator() {
       </DashboardLayout>
 
       {/* ── Print Area (hidden on screen, shown on print) ── */}
-      <div id="quote-print-area" style={{ display: "none", fontFamily: "Inter, sans-serif", padding: 40, background: "#fff", color: "#241418" }}>
+      <div id="quote-print-area" style={{ display: "none", fontFamily: "Inter, sans-serif", padding: 40, background: "#fff", color: "#0C2C32" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 32 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 600, color: "#8A2436", margin: 0 }}>BusinessOS</h1>
-            <p style={{ color: "#9A8285", margin: "4px 0 0", fontSize: 12 }}>Travel Package Quote</p>
+            <h1 style={{ fontSize: 28, fontWeight: 600, color: "#0B3B3D", margin: 0 }}>Custom Holidays</h1>
+            <p style={{ color: "#5B6766", margin: "4px 0 0", fontSize: 12 }}>Travel Package Quote</p>
           </div>
           <div style={{ textAlign: "right" }}>
-            <p style={{ fontSize: 20, fontWeight: 600, color: "#8A2436", margin: 0 }}>{quoteNo}</p>
-            <p style={{ color: "#9A8285", fontSize: 12, margin: "4px 0 0" }}>{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
-            <p style={{ color: "#9A8285", fontSize: 11, margin: "2px 0 0" }}>Valid for 7 days</p>
+            <p style={{ fontSize: 20, fontWeight: 600, color: "#0B3B3D", margin: 0 }}>{quoteNo}</p>
+            <p style={{ color: "#5B6766", fontSize: 12, margin: "4px 0 0" }}>{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+            <p style={{ color: "#5B6766", fontSize: 11, margin: "2px 0 0" }}>Valid for 7 days</p>
           </div>
         </div>
 
         <div style={{ background: "#FAF4F4", borderRadius: 12, padding: 20, marginBottom: 24 }}>
-          <h3 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 12px", color: "#3A2428" }}>CLIENT DETAILS</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 600, margin: "0 0 12px", color: "#1A2324" }}>CLIENT DETAILS</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             {[
               { lbl: "Name", val: client.name || "—" },
@@ -455,8 +455,8 @@ export default function QuoteGenerator() {
               { lbl: "Pax", val: String(client.pax) },
             ].map(({ lbl, val }) => (
               <div key={lbl}>
-                <p style={{ fontSize: 10, color: "#9A8285", margin: "0 0 2px", textTransform: "", }}>{lbl}</p>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#3A2428", margin: 0 }}>{val}</p>
+                <p style={{ fontSize: 10, color: "#5B6766", margin: "0 0 2px", textTransform: "", }}>{lbl}</p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#1A2324", margin: 0 }}>{val}</p>
               </div>
             ))}
           </div>
@@ -464,7 +464,7 @@ export default function QuoteGenerator() {
 
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 24 }}>
           <thead>
-            <tr style={{ background: "#8A2436", color: "#fff" }}>
+            <tr style={{ background: "#0B3B3D", color: "#fff" }}>
               {["Category", "Description", "Qty", "Unit", "Rate", "Amount"].map(h => (
                 <th key={h} style={{ padding: "10px 12px", textAlign: h === "Rate" || h === "Amount" ? "right" : "left", fontSize: 11, fontWeight: 600, }}>{h.toUpperCase()}</th>
               ))}
@@ -474,9 +474,9 @@ export default function QuoteGenerator() {
             {items.map((item, i) => (
               <tr key={item.id} style={{ background: i % 2 === 0 ? "#FBF6F6" : "#fff" }}>
                 <td style={{ padding: "10px 12px", fontSize: 12 }}>{item.category}</td>
-                <td style={{ padding: "10px 12px", fontSize: 12, color: "#6E5458" }}>{item.description || "—"}</td>
+                <td style={{ padding: "10px 12px", fontSize: 12, color: "#4B5D5A" }}>{item.description || "—"}</td>
                 <td style={{ padding: "10px 12px", fontSize: 12, textAlign: "center" }}>{item.qty}</td>
-                <td style={{ padding: "10px 12px", fontSize: 12, color: "#9A8285" }}>{item.unit}</td>
+                <td style={{ padding: "10px 12px", fontSize: 12, color: "#5B6766" }}>{item.unit}</td>
                 <td style={{ padding: "10px 12px", fontSize: 12, textAlign: "right" }}>{INR(item.rate)}</td>
                 <td style={{ padding: "10px 12px", fontSize: 12, textAlign: "right", fontWeight: 600 }}>{INR(item.qty * item.rate)}</td>
               </tr>
@@ -492,17 +492,17 @@ export default function QuoteGenerator() {
               { lbl: `GST / Tax (${taxPct}%)`, val: `+${INR(tax)}`, bold: false, red: false },
             ].map(({ lbl, val, bold, red }) => (
               <div key={lbl} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #F3EAEA" }}>
-                <span style={{ fontSize: 12, color: "#9A8285" }}>{lbl}</span>
-                <span style={{ fontSize: 12, fontWeight: bold ? 700 : 500, color: red ? "#E05B5B" : "#3A2428" }}>{val}</span>
+                <span style={{ fontSize: 12, color: "#5B6766" }}>{lbl}</span>
+                <span style={{ fontSize: 12, fontWeight: bold ? 700 : 500, color: red ? "#E05B5B" : "#1A2324" }}>{val}</span>
               </div>
             ))}
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "2px solid #8A2436", marginTop: 4 }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: "#3A2428" }}>TOTAL</span>
-              <span style={{ fontSize: 20, fontWeight: 600, color: "#8A2436" }}>{INR(total)}</span>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: "2px solid #0B3B3D", marginTop: 4 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#1A2324" }}>TOTAL</span>
+              <span style={{ fontSize: 20, fontWeight: 600, color: "#0B3B3D" }}>{INR(total)}</span>
             </div>
             {client.pax > 0 && subtotal > 0 && (
               <div style={{ textAlign: "right", marginTop: 4 }}>
-                <span style={{ fontSize: 11, color: "#9A8285" }}>Per person: {INR(total / client.pax)}</span>
+                <span style={{ fontSize: 11, color: "#5B6766" }}>Per person: {INR(total / client.pax)}</span>
               </div>
             )}
           </div>
@@ -510,13 +510,13 @@ export default function QuoteGenerator() {
 
         {notes && (
           <div style={{ background: "#FAF4F4", borderRadius: 10, padding: 16 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: "#9A8285", margin: "0 0 6px", textTransform: "", }}>Notes & Terms</p>
-            <p style={{ fontSize: 12, color: "#6E5458", margin: 0, lineHeight: 1.6 }}>{notes}</p>
+            <p style={{ fontSize: 11, fontWeight: 600, color: "#5B6766", margin: "0 0 6px", textTransform: "", }}>Notes & Terms</p>
+            <p style={{ fontSize: 12, color: "#4B5D5A", margin: 0, lineHeight: 1.6 }}>{notes}</p>
           </div>
         )}
 
         <div style={{ marginTop: 32, textAlign: "center", color: "#D9C6C8", fontSize: 10 }}>
-          Generated by BusinessOS · {new Date().toLocaleString("en-IN")}
+          Generated by Custom Holidays · {new Date().toLocaleString("en-IN")}
         </div>
       </div>
 

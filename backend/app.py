@@ -1,5 +1,5 @@
 """
-app.py — BusinessOS backend.
+app.py — Custom Holidays backend.
 Gmail polling is heartbeat-based (frontend drives it), no background threads.
 """
 import logging
@@ -23,17 +23,17 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("\nStarting BusinessOS backend...")
+    print("\nStarting Custom Holidays backend...")
     init_database()
     check_jina_key()
     cleanup_stuck_documents()
     # NOTE: No auto-poll thread started here.
     # Gmail polling is driven by frontend heartbeat every 5 minutes.
     yield
-    print("Stopping BusinessOS backend...")
+    print("Stopping Custom Holidays backend...")
 
 
-app = FastAPI(title="BusinessOS", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="Custom Holidays", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,4 +57,4 @@ app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
 @app.get("/")
 def root():
-    return {"status": "running", "service": "BusinessOS"}
+    return {"status": "running", "service": "Custom Holidays"}

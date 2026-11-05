@@ -27,20 +27,20 @@ const MET_WHERE_OPTIONS = [
 
 const TYPE_COLORS: Record<string, string> = {
   "Luxury Hotel / Resort": "bg-blue-50 text-blue-700 border-blue-200",
-  "Boutique Hotel":        "bg-rose-50 text-rose-700 border-rose-200",
+  "Boutique Hotel":        "bg-teal-50 text-teal-700 border-teal-200",
   "Budget Hotel":          "bg-slate-50 text-slate-600 border-slate-200",
   "Villa / Private Stay":  "bg-teal-50 text-teal-700 border-teal-200",
   "Transport":             "bg-amber-50 text-amber-700 border-amber-200",
   "Car Rental":            "bg-yellow-50 text-yellow-700 border-yellow-200",
   "Flight / GSA":          "bg-sky-50 text-sky-700 border-sky-200",
-  "Cruise":                "bg-rose-50 text-rose-700 border-rose-200",
-  "Tour Operator":         "bg-rose-50 text-rose-700 border-rose-200",
+  "Cruise":                "bg-teal-50 text-teal-700 border-teal-200",
+  "Tour Operator":         "bg-teal-50 text-teal-700 border-teal-200",
   "Travel Agency":         "bg-pink-50 text-pink-700 border-pink-200",
   "Tourism Board":         "bg-orange-50 text-orange-700 border-orange-200",
   "Local Guide":           "bg-lime-50 text-lime-700 border-lime-200",
   "Activity Provider":     "bg-green-50 text-green-700 border-green-200",
   "Visa Agent":            "bg-red-50 text-red-700 border-red-200",
-  "Insurance":             "bg-rose-50 text-rose-700 border-rose-200",
+  "Insurance":             "bg-teal-50 text-teal-700 border-teal-200",
   "Restaurant":            "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
   "Other":                 "bg-gray-50 text-gray-600 border-gray-200",
 };
@@ -595,7 +595,7 @@ export default function Suppliers() {
               <RefreshCw className={"h-3.5 w-3.5 " + (loading ? "animate-spin" : "")} />
               {loading ? "Loading…" : "Refresh"}
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 h-9 border-rose-200 text-rose-600 hover:bg-rose-50"
+            <Button variant="outline" size="sm" className="gap-2 h-9 border-teal-200 text-teal-600 hover:bg-teal-50"
               onClick={() => csvRef.current?.click()} disabled={importing}>
               {importing ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Importing…</> : <><Upload className="h-3.5 w-3.5" />Import CSV</>}
             </Button>
@@ -631,7 +631,7 @@ export default function Suppliers() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label:"Total Contacts", value:stats.total,    icon:Building2, color:"text-blue-600",   bg:"bg-blue-50"   },
-            { label:"Luxury Hotels",  value:stats.luxury,   icon:Tag,       color:"text-rose-600", bg:"bg-rose-50" },
+            { label:"Luxury Hotels",  value:stats.luxury,   icon:Tag,       color:"text-teal-600", bg:"bg-teal-50" },
             { label:"Agencies",       value:stats.agencies, icon:Globe,     color:"text-emerald-600",bg:"bg-emerald-50"},
             { label:"Companies",      value:stats.places,   icon:MapPin,    color:"text-orange-600", bg:"bg-orange-50" },
           ].map((s, i) => (
