@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
-const SUPABASE_URL      = "https://igytkxcarfezhqgojaan.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlneXRreGNhcmZlemhxZ29qYWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3OTQxMTcsImV4cCI6MjA4ODM3MDExN30.MJ32ci1PNhyiXyTsBbk4QbVqhCqZRFKBq28sfZtqVp4";
+const SUPABASE_URL      = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const OCR_API_KEY       = import.meta.env.VITE_OCR_API_KEY as string;
 
 const supabase_headers = {
