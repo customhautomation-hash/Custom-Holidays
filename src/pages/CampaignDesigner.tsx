@@ -16,6 +16,17 @@ const SUPABASE_URL      = (import.meta.env.VITE_SUPABASE_URL as string).replace(
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const OCR_API_KEY       = import.meta.env.VITE_OCR_API_KEY as string;
 
+// Leads are stored in the shared "contacts" table (plus contact_emails / contact_phones)
+const LEAD_FIELDS = ["name", "email", "phone", "source", "stage", "destination", "budget", "company", "designation", "website", "notes", "country"];
+const onlyLeadFields = (row: any) => Object.fromEntries(Object.entries(row).filter(([k]) => LEAD_FIELDS.includes(k)));
+async function saveContactDetails(saved: any[]) {
+  const H = { ...supabase_headers, Prefer: "return=minimal" };
+  const emails = saved.filter(c => c.email).map(c => ({ contact_id: c.id, email: c.email, is_primary: true }));
+  const phones = saved.filter(c => c.phone).map(c => ({ contact_id: c.id, phone_number: c.phone, is_primary: true }));
+  if (emails.length) await fetch(`${SUPABASE_URL}/rest/v1/contact_emails`, { method: "POST", headers: H, body: JSON.stringify(emails) });
+  if (phones.length) await fetch(`${SUPABASE_URL}/rest/v1/contact_phones`, { method: "POST", headers: H, body: JSON.stringify(phones) });
+}
+
 const supabase_headers = {
   "Content-Type": "application/json",
   "apikey": SUPABASE_ANON_KEY,
@@ -235,9 +246,10 @@ export default function CampaignDesigner() {
   const fetchLeads = async () => {
     setLeadsLoading(true);
     try {
-      const res  = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=*&order=created_at.desc`, { headers: supabase_headers });
+      const res  = await fetch(`${SUPABASE_URL}/rest/v1/contacts?select=*&deleted_at=is.null&order=created_at.desc`, { headers: supabase_headers });
       const data = await res.json();
       if (Array.isArray(data)) {
+        data.forEach((l: any) => { l.last_contact = l.last_contacted_at ?? null; });
         setLeads(data);
         setLeadStats({ total_leads: data.length, whatsapp_sent: data.filter((l: LeadFull) => l.whatsapp_sent).length, emails_sent: data.reduce((s: number, l: LeadFull) => s + (l.emails_sent || 0), 0), calls_scheduled: data.reduce((s: number, l: LeadFull) => s + (l.calls_scheduled || 0), 0) });
       }
@@ -268,11 +280,12 @@ export default function CampaignDesigner() {
     try {
       const payload = { name: newLead.name.trim(), email: newLead.email.trim(), phone: newLead.phone.trim(), source: newLead.source, destination: newLead.destination.trim(), budget: newLead.budget.trim(), company: newLead.company?.trim() || null, designation: newLead.designation?.trim() || null, website: newLead.website?.trim() || null, notes: newLead.notes?.trim() || null, stage: (newLead as any).stage || "New" };
       if (isEditing && editingId) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${editingId}`, { method: "PATCH", headers: supabase_headers, body: JSON.stringify(payload) });
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/contacts?id=eq.${editingId}`, { method: "PATCH", headers: supabase_headers, body: JSON.stringify(onlyLeadFields(payload)) });
         if (!res.ok) { alert("Update failed."); return; }
       } else {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, { method: "POST", headers: supabase_headers, body: JSON.stringify({ ...payload, stage: "New", follow_up_count: 0, whatsapp_sent: false, emails_sent: 0, calls_scheduled: 0, created_at: new Date().toISOString() }) });
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/contacts`, { method: "POST", headers: { ...supabase_headers, Prefer: "return=representation" }, body: JSON.stringify({ ...onlyLeadFields(payload), stage: "New", contact_type: "Lead" }) });
         if (!res.ok) { alert("Failed to save."); return; }
+        await saveContactDetails(await res.json());
       }
       closeAddModal(); fetchLeads();
     } catch (e) { console.error("Save error:", e); }
@@ -287,7 +300,7 @@ export default function CampaignDesigner() {
   const handleDelete = async (lead: LeadFull) => {
     if (!confirm(`Delete lead "${lead.name}"? This cannot be undone.`)) return;
     setOpenMenu(null);
-    await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${lead.id}`, { method: "DELETE", headers: supabase_headers });
+    await fetch(`${SUPABASE_URL}/rest/v1/contacts?id=eq.${lead.id}`, { method: "PATCH", headers: supabase_headers, body: JSON.stringify({ deleted_at: new Date().toISOString() }) });
     fetchLeads();
   };
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,11 +311,11 @@ export default function CampaignDesigner() {
       for (let i = 1; i < lines.length; i++) {
         const vals = lines[i].split(",").map(v => v.trim()); if (vals.length < 2) continue;
         const row: any = {}; headers.forEach((h, idx) => { row[h] = vals[idx] || ""; });
-        row.stage = row.stage || "New"; row.source = row.source || "CSV Import"; row.follow_up_count = 0; row.whatsapp_sent = false; row.emails_sent = 0; row.calls_scheduled = 0; row.created_at = new Date().toISOString(); rows.push(row);
+        row.stage = row.stage || "New"; row.source = row.source || "CSV Import"; rows.push({ ...onlyLeadFields(row), contact_type: "Lead" });
       }
       if (!rows.length) { alert("No valid rows found."); return; }
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, { method: "POST", headers: supabase_headers, body: JSON.stringify(rows) });
-      if (res.ok) { alert(`${rows.length} leads imported`); fetchLeads(); } else { alert("Import failed."); }
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/contacts`, { method: "POST", headers: { ...supabase_headers, Prefer: "return=representation" }, body: JSON.stringify(rows) });
+      if (res.ok) { await saveContactDetails(await res.json()); alert(`${rows.length} leads imported`); fetchLeads(); } else { alert("Import failed."); }
     } catch (e) { console.error("CSV error:", e); }
     finally { setImporting(false); if (csvRef.current) csvRef.current.value = ""; }
   };

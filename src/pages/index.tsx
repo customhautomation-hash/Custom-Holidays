@@ -271,8 +271,9 @@ const Index = () => {
 
         // Leads from Supabase
         const { data: leadsData } = await supabase
-          .from("leads")
-          .select("id, status, created_at")
+          .from("contacts")
+          .select("id, status:stage, created_at")
+          .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(100);
         if (leadsData) setLeads(leadsData);
