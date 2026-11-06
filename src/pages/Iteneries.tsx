@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/lib/supabase";
 import {
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const API = "https://fintech-dashboard-61vh.onrender.com/api/itinerary";
+const API = `${API_ROOT}/itinerary`;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type View = "list" | "new" | "detail";

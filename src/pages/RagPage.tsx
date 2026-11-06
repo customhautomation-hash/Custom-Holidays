@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import ReactMarkdown from "react-markdown";
 import { supabase } from "@/lib/supabase";
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const API = "https://fintech-dashboard-61vh.onrender.com/api/rag";
+const API = `${API_ROOT}/rag`;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Source = "email" | "pdf" | "web";

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CustomHolidays – Grab Price",
-  "version": "2.41.0",
+  "version": "2.42.0",
   "description": "Checks exact hotel prices (in ₹) on Booking.com, Agoda, Expedia, Hotels.com and MakeMyTrip for BusinessOS Price Compare (you complete any robot check yourself).",
   "action": {
     "default_popup": "popup.html",
@@ -33,6 +33,7 @@
   "content_scripts": [
     {
       "matches": [
+        "https://custom-holidays.vercel.app/*",
         "https://businessos-roan-iota.vercel.app/*",
         "http://localhost/*",
         "http://127.0.0.1/*"

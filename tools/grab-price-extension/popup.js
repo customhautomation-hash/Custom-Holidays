@@ -2,7 +2,7 @@
 // Reads the final total from the booking page you are looking at (only when you click), and hands it to
 // BusinessOS Price Compare. Nothing is sent anywhere else.
 
-const DASHBOARD = "https://businessos-roan-iota.vercel.app/";
+const DASHBOARD = "https://custom-holidays.vercel.app/";
 
 // Runs inside the booking page. Must be self-contained (no outside variables).
 function extractFromPage() {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -11,7 +12,7 @@ import {
 import ReactMarkdown from "react-markdown";
 
 // ── API ──────────────────────────────────────────────────────────────────────
-const API = "https://fintech-dashboard-61vh.onrender.com/api";
+const API = `${API_ROOT}`;
 
 // ── Mock Custom Holidays Data ─────────────────────────────────────────────────────
 const MOCK_CLIENTS = [

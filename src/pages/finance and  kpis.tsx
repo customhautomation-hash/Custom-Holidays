@@ -1,4 +1,5 @@
 import { DashboardLayout } from "../components/dashboard/DashboardLayout";
+import { API_ROOT } from "../lib/api";
 import { motion } from "framer-motion";
 import {
   IndianRupee, TrendingUp, TrendingDown, Target, PieChart,
@@ -7,7 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-const API = "https://fintech-dashboard-61vh.onrender.com/api";
+const API = `${API_ROOT}`;
 
 interface FinanceData {
   month_start: string; month_end: string;

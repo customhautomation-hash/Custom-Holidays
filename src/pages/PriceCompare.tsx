@@ -8,6 +8,7 @@
  * "Download Excel" writes the standard CustomHolidays costing sheet.
  */
 import { useEffect, useRef, useState } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { supabase } from "@/lib/supabase";
@@ -16,7 +17,7 @@ import {
   Star, ExternalLink, ChevronDown, ChevronUp, BedDouble, KeyRound, Users, Pin, Zap,
 } from "lucide-react";
 
-const API = "https://fintech-dashboard-61vh.onrender.com/api/prices";
+const API = `${API_ROOT}/prices`;
 const STORE = "pc:trip:v3";
 const CORR = "pc:corr:v1";   // learned "website price ÷ Google price" per site (+ per city), from confirmed prices
 const words = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2 && !["hotel", "the", "and", "resort", "by"].includes(w));

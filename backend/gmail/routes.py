@@ -24,7 +24,7 @@ from .fetcher import delete_processed
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-FRONTEND_URL          = os.getenv("FRONTEND_URL", "https://businessos-roan-iota.vercel.app")
+FRONTEND_URL          = os.getenv("FRONTEND_URL", "https://custom-holidays.vercel.app")
 POLL_INTERVAL_SECONDS = 600
 
 _last_sync:  dict[str, float]          = {}

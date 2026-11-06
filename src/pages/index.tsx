@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_ROOT } from "../lib/api";
 import {
   Users, TrendingUp, IndianRupee, Globe, Mail,
   ArrowUpRight, ArrowDownRight, Activity, ShoppingBag,
@@ -12,7 +13,7 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 
-const API = "https://fintech-dashboard-61vh.onrender.com/api";
+const API = `${API_ROOT}`;
 
 // ─── Neumorphic style tokens ───────────────────────────────
 const neu = {

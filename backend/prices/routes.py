@@ -526,7 +526,7 @@ def _ai_json(prompt: str, images: list = None, timeout: int = 60):
         try:
             r = requests.post(OPENROUTER_URL, timeout=timeout + 30,
                               headers={"Authorization": f"Bearer {ok}", "Content-Type": "application/json",
-                                       "HTTP-Referer": "https://businessos-roan-iota.vercel.app", "X-Title": "Custom Holidays Price Compare"},
+                                       "HTTP-Referer": "https://custom-holidays.vercel.app", "X-Title": "Custom Holidays Price Compare"},
                               json={"model": model, "temperature": 0, "messages": [{"role": "user", "content": content}]})
             if r.status_code < 400:
                 return _json_from(r.json()["choices"][0]["message"]["content"] or ""), "openrouter:" + model

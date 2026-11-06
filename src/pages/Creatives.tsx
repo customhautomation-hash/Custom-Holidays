@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_ROOT } from "../lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
@@ -43,7 +44,7 @@ interface Scene {
   promptsLoading: boolean;
 }
 
-const API = "https://fintech-dashboard-61vh.onrender.com/api";
+const API = `${API_ROOT}`;
 const BASE = "";
 const TIMEOUT_MS = 40 * 60 * 1000; // 40 minutes
 

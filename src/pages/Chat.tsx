@@ -1,4 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
+import { API_ROOT } from "../lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send, Paperclip, Search, MoreVertical, CheckCheck,
@@ -11,7 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 
-const API_BASE = "https://fintech-dashboard-61vh.onrender.com/api";
+const API_BASE = `${API_ROOT}`;
 
 const UPLOAD_URL    = `${API_BASE}/chat-upload`;
 const GROUPS_URL    = `${API_BASE}/chat-groups`;

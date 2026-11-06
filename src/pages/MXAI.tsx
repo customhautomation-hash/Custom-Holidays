@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/hooks/useAuth";
 
-const API = "https://fintech-dashboard-61vh.onrender.com/api";
+const API = `${API_ROOT}`;
 
 const genId = () =>
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {

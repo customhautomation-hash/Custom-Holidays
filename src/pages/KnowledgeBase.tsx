@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/lib/supabase";
 import {
@@ -10,8 +11,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-const API_GMAIL     = "https://fintech-dashboard-61vh.onrender.com/api/gmail";
-const API_SUPPLIERS = "https://fintech-dashboard-61vh.onrender.com/api/suppliers";
+const API_GMAIL     = `${API_ROOT}/gmail`;
+const API_SUPPLIERS = `${API_ROOT}/suppliers`;
 const HEARTBEAT_MS  = 5 * 60 * 1000;  // send heartbeat every 5 minutes
 
 async function authHeader(): Promise<string> {

@@ -49,7 +49,7 @@ const INDIA_SITES = { expedia: true, hotels: true };
 const fromDashboard = new Set();
 chrome.tabs.onCreated.addListener((t) => {
   if (!t.openerTabId) return;
-  chrome.tabs.get(t.openerTabId).then(o => { if (/businessos[^/]*\.vercel\.app|localhost|127\.0\.0\.1/.test(o.url || "")) fromDashboard.add(t.id); }).catch(() => {});
+  chrome.tabs.get(t.openerTabId).then(o => { if (/businessos[^/]*\.vercel\.app|custom-holidays[^/]*\.vercel\.app|localhost|127\.0\.0\.1/.test(o.url || "")) fromDashboard.add(t.id); }).catch(() => {});
 });
 chrome.tabs.onUpdated.addListener((id, info) => {
   if (!fromDashboard.has(id) || !info.url) return;

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_ROOT } from "../lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-const API_BASE = "https://fintech-dashboard-61vh.onrender.com/api";
+const API_BASE = `${API_ROOT}`;
 
 type TriggerType = "webhook" | "scheduled" | "not-built";
 type RunStatus   = "idle" | "running" | "success" | "error";
