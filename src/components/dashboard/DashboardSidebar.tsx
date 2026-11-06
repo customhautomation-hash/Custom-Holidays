@@ -1,9 +1,9 @@
 import {
   LayoutDashboard, Users, Map, MessageSquare, FileText,
-  IndianRupee, TrendingUp, CalendarClock, Megaphone,
-  UserCircle2, Truck, ChevronDown, Globe, Briefcase,
+  IndianRupee, TrendingUp, CalendarClock, CalendarPlus, Megaphone,
+  UserCircle2, Truck, ChevronDown, Briefcase, Plane, Palette, Wallet,
   Bot, Handshake, UserCheck, Sparkles, ImagePlus, ListTodo,
-  Zap, LogOut, Database, FileSpreadsheet, FolderTree, Scale,
+  Zap, LogOut, Database, FileSpreadsheet, FolderTree, Scale, BookOpen, Search,
 } from "lucide-react";
 import { NavLink } from "../../components/Navlink";
 import {
@@ -22,14 +22,15 @@ function loadModuleState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
   } catch {}
-  return { webAnalytics: true, leadAnalytics: true, supplierAnalytics: true, houseAutomation: true, mxai: true };
+  return {};   // every group starts open
+
 }
 
 function saveModuleState(state: Record<string, boolean>) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
 }
 
-type ModuleKey = "webAnalytics" | "leadAnalytics" | "supplierAnalytics" | "houseAutomation" | "mxai";
+type ModuleKey = string;
 type Item = { title: string; url: string; icon: React.ElementType };
 type Theme = { BG: string; SHADOW_IN: string; SHADOW_OUT: string; TEXT_MAIN: string; TEXT_MUTED: string; ACCENT: string; HAIRLINE: string };
 
@@ -55,7 +56,7 @@ function ModuleSection({ label, icon: Icon, items, moduleKey, moduleState, setMo
   label: string; icon: React.ElementType; items: Item[]; moduleKey: ModuleKey;
   moduleState: Record<string, boolean>; setModuleState: (s: Record<string, boolean>) => void; t: Theme;
 }) {
-  const open = moduleState[moduleKey];
+  const open = moduleState[moduleKey] !== false;
   const toggle = () => {
     const next = { ...moduleState, [moduleKey]: !open };
     setModuleState(next);
@@ -137,45 +138,59 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <ModuleSection {...sectionProps} label="Analytics & Content" icon={Globe} moduleKey="webAnalytics"
+        {/* Groups follow a trip: first contact → plan → book → suppliers → marketing → team → money → AI */}
+        <ModuleSection {...sectionProps} label="Sales & Leads" icon={Users} moduleKey="sales"
           items={[
-            { title: "Web Analytics", url: "/web-analytics", icon: TrendingUp },
-            { title: "Content",       url: "/content",       icon: FileText   },
+            { title: "Leads",          url: "/leads",           icon: UserCheck    },
+            { title: "Campaigns",      url: "/campaign-design", icon: Megaphone    },
+            { title: "Book a Meeting", url: "/book",            icon: CalendarPlus },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Lead Analytics" icon={Users} moduleKey="leadAnalytics"
+        <ModuleSection {...sectionProps} label="Plan a Trip" icon={Plane} moduleKey="plan"
           items={[
-            { title: "Leads",           url: "/leads",           icon: UserCheck   },
-            { title: "Campaign Design", url: "/campaign-design", icon: Megaphone   },
-            { title: "Itineraries",     url: "/itineraries",     icon: Map         },
-            { title: "Knowledge Base",  url: "/knowledge-base",  icon: Database    },
-            { title: "Clients & PMS", url: "/client-pms",      icon: UserCircle2 },
+            { title: "Itineraries",     url: "/itineraries",    icon: Map             },
+            { title: "Price Compare",   url: "/price-compare",  icon: Scale           },
+            { title: "Quote Generator", url: "/quotes",         icon: FileSpreadsheet },
+            { title: "Trip Documents",  url: "/trip-documents", icon: FolderTree      },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Suppliers" icon={Truck} moduleKey="supplierAnalytics"
+        <ModuleSection {...sectionProps} label="Clients & Bookings" icon={Briefcase} moduleKey="clients"
+          items={[
+            { title: "Clients & PMS", url: "/client-pms", icon: UserCircle2 },
+          ]} />
+
+        <ModuleSection {...sectionProps} label="Suppliers" icon={Truck} moduleKey="suppliers"
           items={[
             { title: "Suppliers",         url: "/suppliers",         icon: Truck     },
             { title: "Supplier Reachout", url: "/supplier-reachout", icon: Bot       },
             { title: "Active Deals",      url: "/active-deals",      icon: Handshake },
+            { title: "Rates Library",     url: "/knowledge-base",    icon: BookOpen  },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Operations" icon={Briefcase} moduleKey="houseAutomation"
+        <ModuleSection {...sectionProps} label="Marketing" icon={Palette} moduleKey="marketing"
           items={[
-            { title: "Scheduling",      url: "/scheduling",     icon: CalendarClock   },
-            { title: "Todo",           url: "/todo",           icon: ListTodo        },
-            { title: "Finance KPIs",       url: "/finance-kpis",   icon: IndianRupee     },
-            { title: "Quote Generator", url: "/quotes",         icon: FileSpreadsheet },
-            { title: "Trip Documents",  url: "/trip-documents", icon: FolderTree      },
-            { title: "Price Compare",   url: "/price-compare",  icon: Scale           },
-            { title: "Team Chat",       url: "/chat",           icon: MessageSquare   },
-            { title: "Creatives",       url: "/creatives",      icon: ImagePlus       },
-            { title: "Automations",     url: "/automations",    icon: Zap             },
+            { title: "Content",       url: "/content",       icon: FileText   },
+            { title: "Creatives",     url: "/creatives",     icon: ImagePlus  },
+            { title: "Web Analytics", url: "/web-analytics", icon: TrendingUp },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Zeno AI" icon={Sparkles} moduleKey="mxai"
+        <ModuleSection {...sectionProps} label="Team" icon={MessageSquare} moduleKey="team"
           items={[
-            { title: "Zeno",      url: "/mxai", icon: Sparkles },
-            { title: "RAG Model", url: "/rag",  icon: Database },
+            { title: "To-do",       url: "/todo",        icon: ListTodo      },
+            { title: "Scheduling",  url: "/scheduling",  icon: CalendarClock },
+            { title: "Team Chat",   url: "/chat",        icon: MessageSquare },
+            { title: "Automations", url: "/automations", icon: Zap           },
+          ]} />
+
+        <ModuleSection {...sectionProps} label="Finance" icon={Wallet} moduleKey="finance"
+          items={[
+            { title: "Finance KPIs", url: "/finance-kpis", icon: IndianRupee },
+          ]} />
+
+        <ModuleSection {...sectionProps} label="CH Assistant" icon={Sparkles} moduleKey="assistant"
+          items={[
+            { title: "Ask CH Assistant", url: "/mxai", icon: Sparkles },
+            { title: "Document Search",  url: "/rag",  icon: Search   },
           ]} />
       </SidebarContent>
 

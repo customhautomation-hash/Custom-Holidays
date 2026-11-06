@@ -33,8 +33,8 @@ interface Message {
 }
 
 const models = [
-  { id: "llama3.2:3b", label: "Zeno Flash", desc: "Fastest — text only" },
-  { id: "qwen3:14b",   label: "Zeno Pro",   desc: "Smartest"            },
+  { id: "llama3.2:3b", label: "CH Flash", desc: "Fastest — text only" },
+  { id: "qwen3:14b",   label: "CH Pro",   desc: "Smartest"            },
 ];
 
 // ── Markdown ───────────────────────────────────────────────
@@ -384,7 +384,7 @@ export default function MXAI() {
       if (err.name === "AbortError") return;
       setMessages(prev => prev.map(m =>
         m.id === assistantId
-          ? { ...m, content: `Could not reach Zeno — ${err.message}`, error: true }
+          ? { ...m, content: `Could not reach CH Assistant — ${err.message}`, error: true }
           : m
       ));
     } finally {
@@ -422,7 +422,7 @@ export default function MXAI() {
               <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
-              <span className="font-semibold text-card-foreground ">Zeno AI</span>
+              <span className="font-semibold text-card-foreground ">CH Assistant</span>
               <span className="ml-auto text-[11px] text-muted-foreground truncate max-w-[80px]">{userName}</span>
             </div>
             <Button
@@ -500,7 +500,7 @@ export default function MXAI() {
                 <Sparkles className="h-8 w-8 text-white" />
               </div>
               <div className="text-center">
-                <h2 className="text-2xl font-semibold text-card-foreground mb-2">Welcome to Zeno AI</h2>
+                <h2 className="text-2xl font-semibold text-card-foreground mb-2">Welcome to CH Assistant</h2>
                 <p className="text-muted-foreground text-sm max-w-sm">
                   Your AI assistant. Start a new chat to get help with itineraries, clients, suppliers, campaigns and more.
                 </p>
@@ -680,7 +680,7 @@ export default function MXAI() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Message Zeno..."
+                    placeholder="Message CH Assistant..."
                     disabled={loading}
                     className="flex-1 border-0 shadow-none focus-visible:ring-0 bg-transparent text-sm resize-none p-0 min-h-[28px]"
                   />
@@ -704,7 +704,7 @@ export default function MXAI() {
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground text-center mt-2">
-                  Zeno · Powered by Custom Holidays AI
+                  CH Assistant · Custom Holidays AI
                 </p>
               </div>
             </>

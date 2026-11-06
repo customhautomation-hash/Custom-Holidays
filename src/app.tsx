@@ -10,13 +10,11 @@ import { DarkModeContext, useDarkModeState } from "@/hooks/useDarkMode";
 
 import Login            from "./pages/Login";
 import Index            from "./pages/index";
-import Analytics        from "./pages/Analytics";
 import Leads            from "./pages/Leads";
 import Suppliers        from "./pages/suppliers";
 import Itineraries      from "./pages/Iteneries";
 import KnowledgeBase    from "./pages/KnowledgeBase";
 import RagModel         from "./pages/RagPage";
-import Operations       from "./pages/Operations";
 import Content          from "./pages/Content";
 import Chat             from "./pages/Chat";
 import NotFound         from "./pages/Notfound";
@@ -24,7 +22,6 @@ import CampaignDesign   from "./pages/CampaignDesigner";
 import Scheduling       from "./pages/Scheduling";
 import ClientPMS        from "./pages/Client and pms";
 import FinanceKPIs      from "./pages/finance and  kpis";
-import LeadAnalytics    from "./pages/Leadanalytics";
 import WebAnalytics     from "./pages/Web analytics";
 import SupplierReachout from "./pages/SupplierReachout";
 import ActiveDeals      from "./pages/ActiveDeals";
@@ -72,8 +69,6 @@ function AppRoutes() {
           <Route path="/"                  element={<Index />} />
           <Route path="/login"             element={<Navigate to="/" replace />} />
           <Route path="/finance-kpis"      element={<FinanceKPIs />} />
-          <Route path="/analytics"         element={<Analytics />} />
-          <Route path="/lead-analytics"    element={<LeadAnalytics />} />
           <Route path="/web-analytics"     element={<WebAnalytics />} />
           <Route path="/leads"             element={<Leads />} />
           <Route path="/suppliers"         element={<Suppliers />} />
@@ -82,7 +77,6 @@ function AppRoutes() {
           <Route path="/itineraries"       element={<Itineraries />} />
           <Route path="/knowledge-base"    element={<KnowledgeBase />} />
           <Route path="/rag"               element={<RagModel />} />
-          <Route path="/operations"        element={<Operations />} />
           <Route path="/content"           element={<Content />} />
           <Route path="/chat"              element={<Chat />} />
           <Route path="/campaign-design"   element={<CampaignDesign />} />

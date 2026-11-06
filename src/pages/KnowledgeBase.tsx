@@ -74,7 +74,7 @@ export default function KnowledgeBase() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
-              <Database className="h-6 w-6 text-accent" /> Knowledge Base
+              <Database className="h-6 w-6 text-accent" /> Rates Library
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Supplier rates extracted automatically from Gmail</p>
           </div>

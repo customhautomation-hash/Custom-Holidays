@@ -347,7 +347,7 @@ const RagPage = () => {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-serif text-foreground">RAG Model</h1>
+            <h1 className="text-2xl font-serif text-foreground">Document Search</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Upload documents, then ask questions — powered by Nemotron vector search
             </p>
