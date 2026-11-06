@@ -162,7 +162,6 @@ export function DashboardSidebar() {
         <ModuleSection {...sectionProps} label="Suppliers" icon={Truck} moduleKey="suppliers"
           items={[
             { title: "Suppliers",         url: "/suppliers",         icon: Truck     },
-            { title: "Supplier Reachout", url: "/supplier-reachout", icon: Bot       },
             { title: "Active Deals",      url: "/active-deals",      icon: Handshake },
             { title: "Rates Library",     url: "/knowledge-base",    icon: BookOpen  },
           ]} />
@@ -177,7 +176,6 @@ export function DashboardSidebar() {
         <ModuleSection {...sectionProps} label="Team" icon={MessageSquare} moduleKey="team"
           items={[
             { title: "To-do",       url: "/todo",        icon: ListTodo      },
-            { title: "Scheduling",  url: "/scheduling",  icon: CalendarClock },
             { title: "Team Chat",   url: "/chat",        icon: MessageSquare },
             { title: "Automations", url: "/automations", icon: Zap           },
           ]} />
@@ -190,7 +188,6 @@ export function DashboardSidebar() {
         <ModuleSection {...sectionProps} label="CH Assistant" icon={Sparkles} moduleKey="assistant"
           items={[
             { title: "Ask CH Assistant", url: "/mxai", icon: Sparkles },
-            { title: "Document Search",  url: "/rag",  icon: Search   },
           ]} />
       </SidebarContent>
 

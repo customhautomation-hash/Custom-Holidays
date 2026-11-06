@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Send, Trash2, MessageSquare, Sparkles,
   Loader2, ChevronDown, Pencil, Check, Square,
-  AlertCircle, X,
+  AlertCircle, X, Paperclip, FileText,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
@@ -32,10 +33,20 @@ interface Message {
   question?: string;
 }
 
+// "Answer from" modes. Auto = normal chatbot that also uses your uploaded documents when they help.
+// Tip: start a message with /docs to force documents, or /chat to ignore them.
 const models = [
-  { id: "llama3.2:3b", label: "CH Flash", desc: "Fastest — text only" },
-  { id: "qwen3:14b",   label: "CH Pro",   desc: "Smartest"            },
+  { id: "auto", label: "Auto",         desc: "Chats normally, uses your documents when relevant" },
+  { id: "on",   label: "My documents", desc: "Answers from your uploaded documents"             },
+  { id: "off",  label: "General chat", desc: "Ignores documents"                                },
 ];
+
+type DocItem = { id: string; filename: string; status: string; page_count?: number; chunk_count?: number };
+const RAG = `${API_ROOT}/rag`;
+async function authHeader(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ? `Bearer ${data.session.access_token}` : "";
+}
 
 // ── Markdown ───────────────────────────────────────────────
 const MXMarkdown = ({ content }: { content: string }) => (
@@ -178,6 +189,57 @@ export default function MXAI() {
   const [editTitle, setEditTitle] = useState("");
   const [selectedModel, setSelectedModel] = useState(models[0].id);
   const [modelOpen, setModelOpen] = useState(false);
+
+  // ── Documents (merged from the old Document Search page) ──
+  const [docs, setDocs]           = useState<DocItem[]>([]);
+  const [showDocs, setShowDocs]   = useState(false);
+  const [uploading, setUploading] = useState<string[]>([]);
+  const [docError, setDocError]   = useState("");
+  const docInputRef = useRef<HTMLInputElement>(null);
+
+  const loadDocs = useCallback(async () => {
+    try {
+      const res = await fetch(`${RAG}/documents`, { headers: { Authorization: await authHeader() } });
+      const data = await res.json();
+      if (data.success) setDocs(data.documents || []);
+    } catch { /* backend asleep or offline: try again next time */ }
+  }, []);
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  const uploadDocs = async (files: FileList | null) => {
+    if (!files) return;
+    setDocError("");
+    for (const file of Array.from(files)) {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+      if (!["pdf", "txt", "docx", "doc", "zip"].includes(ext)) { setDocError(`${file.name}: use PDF, Word, TXT or ZIP`); continue; }
+      setUploading(u => [...u, file.name]);
+      try {
+        const form = new FormData(); form.append("file", file);
+        const res = await fetch(`${RAG}/upload`, { method: "POST", headers: { Authorization: await authHeader() }, body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Upload failed");
+        // wait until the document is read and indexed
+        for (let i = 0; i < 150; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const st = await (await fetch(`${RAG}/status/${data.job_id}`, { headers: { Authorization: await authHeader() } })).json();
+          if (st.status === "error") throw new Error(st.error || "Could not read the file");
+          if (st.status !== "processing") break;
+        }
+      } catch (e: any) {
+        setDocError(`${file.name}: ${e.message || "Upload failed"}`);
+      } finally {
+        setUploading(u => u.filter(n => n !== file.name));
+        loadDocs();
+      }
+    }
+    if (docInputRef.current) docInputRef.current.value = "";
+  };
+
+  const deleteDoc = async (id: string) => {
+    if (!confirm("Remove this document from CH Assistant?")) return;
+    await fetch(`${RAG}/documents/${id}`, { method: "DELETE", headers: { Authorization: await authHeader() } });
+    setDocs(d => d.filter(x => x.id !== id));
+  };
   const [sendHovered, setSendHovered] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -305,8 +367,9 @@ export default function MXAI() {
     try {
       const res = await fetch(`${API}/mxai/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: await authHeader() },
         body: JSON.stringify({
+          docs_mode: selectedModel,
           conversation_id: activeId,
           user_name: userName,
           message: textToSend,
@@ -630,13 +693,53 @@ export default function MXAI() {
 
               {/* Input area */}
               <div className="border-t border-border p-4 shrink-0">
-                <div className="relative mb-2">
+                {/* Documents panel */}
+                {showDocs && (
+                  <div className="mb-3 rounded-2xl border border-border bg-card p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-card-foreground">Documents CH Assistant can read</p>
+                      <div className="flex items-center gap-2">
+                        <input ref={docInputRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,.zip" className="hidden"
+                          onChange={e => uploadDocs(e.target.files)} />
+                        <Button size="sm" variant="outline" className="h-8 px-3 text-xs" onClick={() => docInputRef.current?.click()}>
+                          <Paperclip className="h-3.5 w-3.5 mr-1" /> Upload
+                        </Button>
+                        <button onClick={() => setShowDocs(false)} aria-label="Close documents" className="p-1 text-muted-foreground hover:text-card-foreground"><X className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    {docError && <p className="text-[11px] text-red-600 mb-2">{docError}</p>}
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {uploading.map(n => (
+                        <div key={n} className="flex items-center gap-2 text-xs text-muted-foreground px-2 py-1.5">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading {n}…
+                        </div>
+                      ))}
+                      {docs.length === 0 && uploading.length === 0 && (
+                        <p className="text-xs text-muted-foreground px-2 py-1.5">No documents yet. Upload contracts, rate sheets, policies or brochures, then just ask about them.</p>
+                      )}
+                      {docs.map(d => (
+                        <div key={d.id} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg hover:bg-muted/50">
+                          <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                          <span className="flex-1 truncate text-card-foreground">{d.filename}</span>
+                          <span className="text-muted-foreground">{d.status === "indexed" ? `${d.page_count || 0} pages` : d.status}</span>
+                          <button onClick={() => deleteDoc(d.id)} aria-label={`Remove ${d.filename}`} className="p-1 text-muted-foreground hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="relative mb-2 flex items-center gap-2">
+                  <button onClick={() => setShowDocs(s => !s)}
+                    className="order-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-card-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted/50">
+                    <Paperclip className="h-3 w-3" />
+                    <span className="font-medium">Documents{docs.length ? ` (${docs.length})` : ""}</span>
+                  </button>
                   <button
                     onClick={() => setModelOpen(!modelOpen)}
                     className="flex items-center gap-2 text-xs text-muted-foreground hover:text-card-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted/50"
                   >
                     <Sparkles className="h-3 w-3 text-fuchsia-400" />
-                    <span className="font-medium">{models.find(m => m.id === selectedModel)?.label}</span>
+                    <span className="font-medium">Answer from: {models.find(m => m.id === selectedModel)?.label}</span>
                     <span className="text-[11px] text-muted-foreground/60">
                       · {models.find(m => m.id === selectedModel)?.desc}
                     </span>

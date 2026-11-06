@@ -14,16 +14,13 @@ import Leads            from "./pages/Leads";
 import Suppliers        from "./pages/suppliers";
 import Itineraries      from "./pages/Iteneries";
 import KnowledgeBase    from "./pages/KnowledgeBase";
-import RagModel         from "./pages/RagPage";
 import Content          from "./pages/Content";
 import Chat             from "./pages/Chat";
 import NotFound         from "./pages/Notfound";
 import CampaignDesign   from "./pages/CampaignDesigner";
-import Scheduling       from "./pages/Scheduling";
 import ClientPMS        from "./pages/Client and pms";
 import FinanceKPIs      from "./pages/finance and  kpis";
 import WebAnalytics     from "./pages/Web analytics";
-import SupplierReachout from "./pages/SupplierReachout";
 import ActiveDeals      from "./pages/ActiveDeals";
 import MXAI             from "./pages/MXAI";
 import TodoPage         from "./pages/TodoPage";
@@ -72,15 +69,13 @@ function AppRoutes() {
           <Route path="/web-analytics"     element={<WebAnalytics />} />
           <Route path="/leads"             element={<Leads />} />
           <Route path="/suppliers"         element={<Suppliers />} />
-          <Route path="/supplier-reachout" element={<SupplierReachout />} />
           <Route path="/active-deals"      element={<ActiveDeals />} />
           <Route path="/itineraries"       element={<Itineraries />} />
           <Route path="/knowledge-base"    element={<KnowledgeBase />} />
-          <Route path="/rag"               element={<RagModel />} />
+          <Route path="/rag"               element={<Navigate to="/mxai" replace />} />
           <Route path="/content"           element={<Content />} />
           <Route path="/chat"              element={<Chat />} />
           <Route path="/campaign-design"   element={<CampaignDesign />} />
-          <Route path="/scheduling"        element={<Scheduling />} />
           <Route path="/client-pms"        element={<ClientPMS />} />
           <Route path="/todo"              element={<TodoPage />} />
           <Route path="/mxai"              element={<MXAI />} />

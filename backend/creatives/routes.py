@@ -128,6 +128,7 @@ class MXAIMessageRequest(BaseModel):
     conversation_id: str
     user_name: str
     message: str
+    docs_mode: str = "auto"   # auto | on | off  (CH Assistant: use uploaded documents?)
 
 class MXAIConversationRequest(BaseModel):
     user_name: str
@@ -532,10 +533,47 @@ async def get_mxai_messages(conversation_id: str):
         raise HTTPException(status_code=500, detail=f"Could not load messages: {str(e)}")
 
 
+# Phrases that mean "look in my documents"
+DOC_HINTS = ("my document", "my documents", "the document", "the documents", "uploaded", "the pdf", "the file",
+             "contract", "rate sheet", "according to", "in the brochure", "policy says")
+AUTO_DOC_SCORE = 0.45   # in Auto mode, only use passages that are clearly relevant
+
+
+def _find_doc_passages(message: str, mode: str, authorization: Optional[str]) -> list:
+    """CH Assistant document search (the old Document Search / RAG page, merged into chat)."""
+    if mode == "off" or not authorization or not authorization.startswith("Bearer "):
+        return []
+    try:
+        user = supabase.auth.get_user(authorization.split(" ", 1)[1])
+        user_id = user.user.id if user and user.user else None
+        if not user_id:
+            return []
+        from rag.embeddings import embed_text
+        from rag.retrieval import retrieve_text_chunks
+        chunks = retrieve_text_chunks(embed_text(message, task="retrieval.query"), str(user_id), top_k=8)
+    except Exception as e:
+        print("CH Assistant document search skipped:", e)
+        return []
+    if mode == "on":
+        return chunks[:6]
+    return [c for c in chunks if c.get("score", 0) >= AUTO_DOC_SCORE][:5]
+
+
 @router.post("/mxai/chat")
-async def mxai_chat(payload: MXAIMessageRequest):
+async def mxai_chat(payload: MXAIMessageRequest, authorization: Optional[str] = Header(None)):
     conversation_id = payload.conversation_id
     user_message = payload.message.strip()
+
+    # /docs forces documents, /chat ignores them; certain phrases switch Auto to documents
+    docs_mode = (payload.docs_mode or "auto").lower()
+    low = user_message.lower()
+    if low.startswith("/docs"):
+        docs_mode, user_message = "on", user_message[5:].strip()
+    elif low.startswith("/chat"):
+        docs_mode, user_message = "off", user_message[5:].strip()
+    elif docs_mode == "auto" and any(h in low for h in DOC_HINTS):
+        docs_mode = "on"
+    doc_passages = _find_doc_passages(user_message, docs_mode, authorization) if user_message else []
 
     if not user_message:
         raise HTTPException(status_code=422, detail="message is required")
@@ -565,8 +603,9 @@ async def mxai_chat(payload: MXAIMessageRequest):
         {
             "role": "system",
             "content": (
-                "You are MXAI, a helpful AI assistant. Be helpful, concise, "
-                "and use clean markdown inside the 'reply' field.\n\n"
+                "You are CH Assistant, the in-house AI assistant of Custom Holidays, a luxury travel "
+                "company in Mumbai. Help the team with trips, clients, suppliers, quotes and writing. "
+                "Be helpful, concise, and use clean markdown inside the 'reply' field.\n\n"
                 "You MUST respond with ONLY a single JSON object, no other text before or "
                 "after it, matching exactly this shape:\n"
                 '{"reply": "your markdown reply text here", "options": ["opt1", "opt2"]}\n\n'
@@ -585,6 +624,31 @@ async def mxai_chat(payload: MXAIMessageRequest):
         content = row.get("content", "")
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
+
+    sources_line = ""
+    if doc_passages:
+        context = "\n\n".join(
+            f"[{c.get('filename', 'Document')} p.{c.get('page_number', 0)}]\n{(c.get('text') or '').strip()}"
+            for c in doc_passages
+        )
+        messages.insert(1, {"role": "system", "content": (
+            "Passages from the team's uploaded documents that may answer the latest question:\n\n"
+            f"{context}\n\n"
+            "Base your answer on these passages and mention the document name and page in brackets, "
+            "e.g. [Rates 2026.pdf p.3]. If they do not contain the answer, say so briefly, then help "
+            "from general knowledge if you can."
+        )})
+        seen = []
+        for c in doc_passages:
+            tag = f"{c.get('filename', 'Document')} p.{c.get('page_number', 0)}"
+            if tag not in seen:
+                seen.append(tag)
+        sources_line = "\n\n_Sources: " + ", ".join(seen) + "_"
+    elif docs_mode == "on":
+        messages.insert(1, {"role": "system", "content": (
+            "The user asked you to answer from their uploaded documents, but nothing relevant was found "
+            "(or no documents are uploaded). Say that clearly and suggest uploading the document."
+        )})
 
     def event_stream():
         full_content = ""
@@ -638,6 +702,7 @@ async def mxai_chat(payload: MXAIMessageRequest):
 
             if not reply_text:
                 reply_text = "Sorry, I couldn't generate a response. Please try again."
+            reply_text += sources_line
 
             try:
                 supabase.table("mxai_conversations").update({
@@ -666,7 +731,7 @@ async def mxai_chat(payload: MXAIMessageRequest):
             yield f"data: {json.dumps({'done': True, 'reply': reply_text, 'options': options})}\n\n"
 
         except Exception as error:
-            yield f"data: {json.dumps({'error': f'Could not reach MXAI — {str(error)}'})}\n\n"
+            yield f"data: {json.dumps({'error': f'Could not reach CH Assistant — {str(error)}'})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

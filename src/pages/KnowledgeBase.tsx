@@ -80,7 +80,6 @@ export default function KnowledgeBase() {
           </div>
           <div className="flex items-center gap-2">
             <Btn variant="secondary" size="sm" onClick={() => navigate("/suppliers")}><Users className="h-3.5 w-3.5" /> Suppliers <ArrowRight className="h-3 w-3" /></Btn>
-            <Btn variant="secondary" size="sm" onClick={() => navigate("/supplier-reachout")}><Mail className="h-3.5 w-3.5" /> Reachout <ArrowRight className="h-3 w-3" /></Btn>
             <Btn variant="secondary" size="sm" onClick={() => navigate("/active-deals")}><Handshake className="h-3.5 w-3.5" /> Active Deals <ArrowRight className="h-3 w-3" /></Btn>
           </div>
         </div>
@@ -422,10 +421,9 @@ function OverviewPanel() {
       )}
 
       {/* Cross-links */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
           { icon: <Users className="h-5 w-5" />, title: "Suppliers", desc: "All suppliers extracted from Gmail", path: "/suppliers", color: "text-blue-600 bg-blue-50" },
-          { icon: <Mail className="h-5 w-5" />,  title: "Supplier Reachout", desc: "Send bulk outreach to your suppliers", path: "/supplier-reachout", color: "text-teal-600 bg-teal-50" },
           { icon: <Handshake className="h-5 w-5" />, title: "Active Deals", desc: "Track ongoing deals with suppliers", path: "/active-deals", color: "text-emerald-600 bg-emerald-50" },
         ].map(item => (
           <button key={item.path} onClick={() => window.location.href = item.path}
