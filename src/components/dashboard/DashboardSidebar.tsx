@@ -116,10 +116,7 @@ export function DashboardSidebar() {
       {/* Logo */}
       <SidebarHeader className="px-4 pt-5 pb-4 border-b-0" style={{ background: t.BG }}>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-serif text-[14px] font-bold"
-            style={{ border: "1.5px solid #D4AF5A", color: "#D4AF5A" }}>
-            CH
-          </div>
+          <img src="/ch-mark-peach.png" alt="Custom Holidays" className="h-11 w-11 shrink-0" />
           <div className="min-w-0">
             <h2 className="font-serif text-[18px] font-semibold leading-tight" style={{ color: t.TEXT_MAIN }}>Custom Holidays</h2>
             <p className="text-xs leading-tight" style={{ color: t.TEXT_MUTED }}>Dashboard</p>

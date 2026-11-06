@@ -48,8 +48,7 @@ function AppRoutes() {
       <div className="min-h-screen flex items-center justify-center"
         style={{ background: "var(--neu-base, #F3EAEA)" }}>
         <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl flex items-center justify-center animate-pulse"
-            style={{ background: "#13585B" }} />
+          <img src="/ch-mark-teal.png" alt="Custom Holidays" className="h-14 w-14 animate-pulse" />
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>

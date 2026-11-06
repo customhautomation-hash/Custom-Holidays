@@ -433,7 +433,7 @@ export default function QuoteGenerator() {
       <div id="quote-print-area" style={{ display: "none", fontFamily: "Inter, sans-serif", padding: 40, background: "#fff", color: "#0C2C32" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 32 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 600, color: "#0B3B3D", margin: 0 }}>Custom Holidays</h1>
+            <img src="/ch-logo-teal.png" alt="Custom Holidays" style={{ height: 72, width: "auto", display: "block", marginBottom: 6 }} />
             <p style={{ color: "#5B6766", margin: "4px 0 0", fontSize: 12 }}>Travel Package Quote</p>
           </div>
           <div style={{ textAlign: "right" }}>

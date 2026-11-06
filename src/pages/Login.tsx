@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Sparkles, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 
 const N = {
   card: {
@@ -78,18 +78,10 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div
-            className="h-16 w-16 rounded-2xl flex items-center justify-center mb-4"
-            style={{
-              background: "#13585B",
-              boxShadow: "6px 6px 14px var(--neu-dark), -6px -6px 14px #FFFFFF",
-            }}
-          >
-            <Sparkles className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-semibold" style={{ color: "var(--foreground, #1A2324)" }}>
-            Custom Holidays
-          </h1>
+          {/* Custom Holidays logo (teal on light, peach on dark) */}
+          <h1 className="sr-only">Custom Holidays</h1>
+          <img src="/ch-logo-teal.png" alt="Custom Holidays" className="block dark:hidden w-[220px] h-auto mb-4" />
+          <img src="/ch-logo-peach.png" alt="Custom Holidays" className="hidden dark:block w-[220px] h-auto mb-4" />
           <p className="text-sm mt-1" style={{ color: "var(--muted-foreground, #5B6766)" }}>
             {mode === "login" && "Sign in to your workspace"}
             {mode === "signup" && "Create your account"}
