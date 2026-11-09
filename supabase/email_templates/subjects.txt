@@ -1,0 +1,5 @@
+confirm_signup: Confirm your email for Custom Holidays
+reset_password: Reset your Custom Holidays password
+magic_link: Your Custom Holidays sign-in link
+invite_user: You've been invited to Custom Holidays
+change_email: Confirm your new email for Custom Holidays
