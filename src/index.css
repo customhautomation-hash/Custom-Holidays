@@ -39,13 +39,13 @@
     --radius: 1rem;
 
     /* ── Sidebar ── */
-    --sidebar-background: 182 69% 14%;
-    --sidebar-foreground: 40 30% 92%;
-    --sidebar-primary: 42 58% 59%;
-    --sidebar-primary-foreground: 182 69% 14%;
-    --sidebar-accent: 182 55% 18%;
-    --sidebar-accent-foreground: 40 50% 94%;
-    --sidebar-border: 182 50% 20%;
+    --sidebar-background: 0 30% 93%;
+    --sidebar-foreground: 186 15% 12%;
+    --sidebar-primary: 182 65% 21%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 22% 89%;
+    --sidebar-accent-foreground: 186 15% 12%;
+    --sidebar-border: 0 18% 85%;
     --sidebar-ring: 42 58% 59%;
 
     /* ── Status ── */
@@ -101,7 +101,7 @@
     --ring: 182 50% 36%;
 
     /* ── Sidebar ── */
-    --sidebar-background: 182 69% 9%;
+    --sidebar-background: 189 61% 12%;
     --sidebar-foreground: 40 30% 85%;
     --sidebar-primary: 42 58% 59%;
     --sidebar-primary-foreground: 190 65% 12%;
@@ -136,22 +136,22 @@
 
   /* Cards / panels that use bg-card Tailwind class */
   .dark .bg-card {
-    background: hsl(345 25% 13%) !important;
+    background: #10343A !important;
   }
 
   /* Borders */
   .dark .border-border {
-    border-color: hsl(345 20% 22%) !important;
+    border-color: #1E3E44 !important;
   }
 
   /* Text overrides */
   .dark .text-foreground,
   .dark .text-card-foreground {
-    color: hsl(350 40% 90%) !important;
+    color: #E6EFEC !important;
   }
 
   .dark .text-muted-foreground {
-    color: hsl(350 14% 58%) !important;
+    color: #8FA6A3 !important;
   }
 
   /* ── Scrollbar ── */
@@ -218,7 +218,7 @@
 
   .neu-btn-accent {
     background: linear-gradient(135deg, #1F6F72, #0B3B3D);
-    box-shadow: 3px 3px 8px rgba(138, 36, 54, 0.4), -2px -2px 6px rgba(255,255,255,0.1);
+    box-shadow: 3px 3px 8px rgba(6, 26, 30, 0.35), -2px -2px 6px rgba(255,255,255,0.1);
     border-radius: 0.75rem;
     border: none;
     cursor: pointer;
@@ -227,7 +227,7 @@
   }
 
   .neu-btn-accent:hover {
-    box-shadow: 4px 4px 12px rgba(138, 36, 54, 0.5), -3px -3px 8px rgba(255,255,255,0.15);
+    box-shadow: 4px 4px 12px rgba(6, 26, 30, 0.45), -3px -3px 8px rgba(255,255,255,0.15);
     transform: translateY(-1px);
   }
 
