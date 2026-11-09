@@ -54,7 +54,9 @@ export default function MasterCRM() {
   useEffect(() => { load(); }, []);
 
   const today = new Date();
-  const tripsOf = (c: Contact) => trips.filter(x => norm(x.client) && (norm(x.client) === norm(c.name) || norm(x.client).includes(norm(c.name)) || norm(c.name).includes(norm(x.client))));
+  // a trip belongs to a client when the names match; partial matches only for full names (so "Mr" or "Shah" don't match everyone)
+  const sameName = (a: string, b: string) => !!a && !!b && (a === b || (b.length >= 6 && b.includes(" ") && a.includes(b)) || (a.length >= 6 && a.includes(" ") && b.includes(a)));
+  const tripsOf = (c: Contact) => trips.filter(x => sameName(norm(x.client), norm(c.name)));
   const spentOf = (c: Contact) => bookings.filter(b => b.contact_id === c.id).reduce((s, b) => s + Number(b.total_booking_value || 0), 0);
   const statusOf = (c: Contact): Status => {
     const ts = tripsOf(c);
@@ -98,7 +100,7 @@ export default function MasterCRM() {
             {views.map(v => (
               <button key={v.key} onClick={() => { setView(v.key); setPage(0); }}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "0 0 10px", marginBottom: -1,
-                  color: view === v.key ? t.TEAL : t.MUTED, fontWeight: view === v.key ? 600 : 400, borderBottom: view === v.key ? "2px solid #B8913E" : "2px solid transparent" }}>
+                  color: view === v.key ? t.TEAL : t.MUTED, fontWeight: view === v.key ? 600 : 400, borderRadius: 0, borderBottom: view === v.key ? "2px solid #B8913E" : "2px solid transparent" }}>
                 {v.label} · {counts[v.key]}
               </button>))}
           </div>
