@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { DarkModeContext, useDarkModeState } from "@/hooks/useDarkMode";
 
 import Login            from "./pages/Login";
+import { Privacy, Terms } from "./pages/Legal";
 import Index            from "./pages/index";
 import MasterCRM        from "./pages/MasterCRM";
 import LeadTools        from "./pages/Leads";
@@ -55,8 +56,10 @@ function AppRoutes() {
   if (!session) {
     return (
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*"      element={<Navigate to="/login" replace />} />
+        <Route path="/login"   element={<Login />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms"   element={<Terms />} />
+        <Route path="*"        element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
@@ -87,6 +90,8 @@ function AppRoutes() {
           <Route path="/creatives"         element={<Creatives />} />
           <Route path="/finance-kpis"      element={<FinanceKPIs />} />
           <Route path="/profile"           element={<Profile />} />
+          <Route path="/privacy"           element={<Privacy />} />
+          <Route path="/terms"             element={<Terms />} />
           {/* old addresses still work */}
           <Route path="/client-pms"        element={<Navigate to="/trips" replace />} />
           <Route path="/trip-documents"    element={<Navigate to="/vouchers" replace />} />
