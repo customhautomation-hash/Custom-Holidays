@@ -3,14 +3,14 @@ import {
   IndianRupee, TrendingUp, CalendarClock, CalendarPlus, Megaphone,
   UserCircle2, Truck, ChevronDown, Briefcase, Plane, Palette, Wallet,
   Bot, Handshake, UserCheck, Sparkles, ImagePlus, ListTodo,
-  Zap, LogOut, Database, FileSpreadsheet, FolderTree, Scale, BookOpen, Search,
+  Zap, LogOut, FileSpreadsheet, Scale, BarChart3, Workflow, Ticket, Building2,
 } from "lucide-react";
-import { NavLink } from "../../components/Navlink";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader,
 } from "../../components/ui/sidebar";
 import { useState } from "react";
+import { useNavigate, useLocation, NavLink as RouterNavLink } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useDarkMode } from "../../hooks/useDarkMode";
@@ -39,14 +39,14 @@ function NavRow({ item, t }: { item: Item; t: Theme }) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild>
-        <NavLink to={item.url} end
+        <RouterNavLink to={item.url} end
           className="flex items-center gap-2.5 h-8 px-2.5 rounded-[8px] text-[13px] transition-colors hover:bg-white/[0.06]"
-          style={{ color: t.TEXT_MUTED }}
-          activeClassName=""
-          activeStyle={{ color: t.ACCENT, background: t.BG, boxShadow: t.SHADOW_IN, fontWeight: 500 }}>
+          style={({ isActive }) => isActive
+            ? { color: t.ACCENT, background: t.BG, boxShadow: t.SHADOW_IN, fontWeight: 600 }
+            : { color: t.TEXT_MUTED }}>
           <item.icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.5} />
           <span className="truncate">{item.title}</span>
-        </NavLink>
+        </RouterNavLink>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -110,6 +110,8 @@ export function DashboardSidebar() {
 
   const sectionProps = { moduleState, setModuleState, t };
   const handleSignOut = async () => { await supabase.auth.signOut(); };
+  const navigate = useNavigate();
+  const onProfile = useLocation().pathname === "/profile";
 
   return (
     <Sidebar className="border-r-0" style={{ background: t.BG }}>
@@ -138,77 +140,68 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Groups follow a trip: first contact → plan → book → suppliers → marketing → team → money → AI */}
-        <ModuleSection {...sectionProps} label="Sales & Leads" icon={Users} moduleKey="sales"
+        {/* Groups: leads → operations → trips → suppliers → marketing → money. CH Assistant is the corner pop-up. */}
+        <ModuleSection {...sectionProps} label="Lead Analytics" icon={Users} moduleKey="leads"
           items={[
-            { title: "Leads",          url: "/leads",           icon: UserCheck    },
-            { title: "Campaigns",      url: "/campaign-design", icon: Megaphone    },
-            { title: "Book a Meeting", url: "/book",            icon: CalendarPlus },
+            { title: "Master CRM",     url: "/leads",          icon: UserCheck  },
+            { title: "Web Analytics",  url: "/web-analytics",  icon: TrendingUp },
+            { title: "Meta Analytics", url: "/meta-analytics", icon: BarChart3  },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Plan a Trip" icon={Plane} moduleKey="plan"
+        <ModuleSection {...sectionProps} label="Operations" icon={Workflow} moduleKey="operations"
           items={[
-            { title: "Itineraries",     url: "/itineraries",    icon: Map             },
-            { title: "Price Compare",   url: "/price-compare",  icon: Scale           },
-            { title: "Quote Generator", url: "/quotes",         icon: FileSpreadsheet },
-            { title: "Trip Documents",  url: "/trip-documents", icon: FolderTree      },
+            { title: "Itineraries",       url: "/itineraries",    icon: Map             },
+            { title: "Price Compare",     url: "/price-compare",  icon: Scale           },
+            { title: "Quote Generator",   url: "/quotes",         icon: FileSpreadsheet },
+            { title: "Voucher Generator", url: "/vouchers",       icon: Ticket          },
+            { title: "Team Chat",         url: "/chat",           icon: MessageSquare   },
+            { title: "Automations",       url: "/automations",    icon: Zap             },
           ]} />
 
-        <ModuleSection {...sectionProps} label="Clients & Bookings" icon={Briefcase} moduleKey="clients"
+        <ModuleSection {...sectionProps} label="Trips" icon={Briefcase} moduleKey="trips"
           items={[
-            { title: "Clients & PMS", url: "/client-pms", icon: UserCircle2 },
+            { title: "Active Trips", url: "/trips", icon: Plane },
           ]} />
 
         <ModuleSection {...sectionProps} label="Suppliers" icon={Truck} moduleKey="suppliers"
           items={[
-            { title: "Suppliers",         url: "/suppliers",         icon: Truck     },
-            { title: "Active Deals",      url: "/active-deals",      icon: Handshake },
-            { title: "Rates Library",     url: "/knowledge-base",    icon: BookOpen  },
+            { title: "Suppliers",    url: "/suppliers",    icon: Building2 },
+            { title: "Active Deals", url: "/active-deals", icon: Handshake },
           ]} />
 
         <ModuleSection {...sectionProps} label="Marketing" icon={Palette} moduleKey="marketing"
           items={[
-            { title: "Content",       url: "/content",       icon: FileText   },
-            { title: "Creatives",     url: "/creatives",     icon: ImagePlus  },
-            { title: "Web Analytics", url: "/web-analytics", icon: TrendingUp },
-          ]} />
-
-        <ModuleSection {...sectionProps} label="Team" icon={MessageSquare} moduleKey="team"
-          items={[
-            { title: "To-do",       url: "/todo",        icon: ListTodo      },
-            { title: "Team Chat",   url: "/chat",        icon: MessageSquare },
-            { title: "Automations", url: "/automations", icon: Zap           },
+            { title: "Campaigns", url: "/campaign-design", icon: Megaphone },
+            { title: "Content",   url: "/content",         icon: FileText  },
+            { title: "Creatives", url: "/creatives",       icon: ImagePlus },
           ]} />
 
         <ModuleSection {...sectionProps} label="Finance" icon={Wallet} moduleKey="finance"
           items={[
             { title: "Finance KPIs", url: "/finance-kpis", icon: IndianRupee },
           ]} />
-
-        <ModuleSection {...sectionProps} label="CH Assistant" icon={Sparkles} moduleKey="assistant"
-          items={[
-            { title: "Ask CH Assistant", url: "/mxai", icon: Sparkles },
-          ]} />
       </SidebarContent>
 
       {/* User footer */}
-      <div className="px-4 py-3 mt-auto flex items-center gap-3"
+      <div className="px-2 py-3 mt-auto flex items-center gap-1"
         style={{ background: t.BG, borderTop: `1px solid ${HAIRLINE}` }}>
         {user && (
-          <>
-            <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium"
+          <button onClick={() => navigate("/profile")} title="Profile & settings"
+            className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl px-2 py-1.5"
+            style={{ background: t.BG, border: "none", cursor: "pointer", boxShadow: onProfile ? t.SHADOW_IN : "none" }}>
+            <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs"
               style={{ border: "1.5px solid #D4AF5A", color: "#D4AF5A", fontWeight: 600 }}>
-              {(profile?.full_name || user.email || "U")[0].toUpperCase()}
+              {(profile?.full_name || user.email || "U").split(/\s+/).slice(0, 2).map((w: string) => w[0]?.toUpperCase()).join("")}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium truncate" style={{ color: t.TEXT_MAIN }}>
+              <p className="text-[13px] font-medium truncate" style={{ color: onProfile ? t.ACCENT : t.TEXT_MAIN }}>
                 {profile?.full_name || user.email?.split("@")[0]}
               </p>
               <p className="text-xs truncate" style={{ color: t.TEXT_MUTED }}>
-                {profile?.role || "member"}
+                {(profile?.role ? profile.role[0].toUpperCase() + profile.role.slice(1) : "Member")} · Profile &amp; settings
               </p>
             </div>
-          </>
+          </button>
         )}
         <button onClick={handleSignOut} title="Sign out"
           className="h-8 w-8 flex items-center justify-center rounded-[10px] shrink-0 transition-colors hover:bg-white/10"

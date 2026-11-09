@@ -147,9 +147,9 @@ def get_oauth_url(authorization: Optional[str] = Header(None)):
 @router.get("/oauth/callback")
 def oauth_callback(code: str = Query(...), state: str = Query(""), error: str = Query(None)):
     if error:
-        return RedirectResponse(url=f"{FRONTEND_URL}/knowledge-base?gmail_error={error}")
+        return RedirectResponse(url=f"{FRONTEND_URL}/profile?gmail_error={error}")
     if not state:
-        return RedirectResponse(url=f"{FRONTEND_URL}/knowledge-base?gmail_error=missing_state")
+        return RedirectResponse(url=f"{FRONTEND_URL}/profile?gmail_error=missing_state")
     try:
         tokens = exchange_code_for_tokens(code)
         access_token = tokens.get("access_token")
@@ -159,10 +159,10 @@ def oauth_callback(code: str = Query(...), state: str = Query(""), error: str = 
         save_tokens(state, tokens, gmail_email)
         logger.info("Gmail connected: %s → %s", state[:8], gmail_email)
         _last_sync[state] = 0
-        return RedirectResponse(url=f"{FRONTEND_URL}/knowledge-base?gmail_connected=1")
+        return RedirectResponse(url=f"{FRONTEND_URL}/profile?gmail_connected=1")
     except Exception as e:
         logger.error("OAuth callback failed: %s", e)
-        return RedirectResponse(url=f"{FRONTEND_URL}/knowledge-base?gmail_error={str(e)[:100]}")
+        return RedirectResponse(url=f"{FRONTEND_URL}/profile?gmail_error={str(e)[:100]}")
 
 
 @router.post("/sync-now")

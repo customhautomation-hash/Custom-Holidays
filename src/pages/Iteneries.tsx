@@ -570,7 +570,7 @@ function CreateItinerary({ onBack, onSaved }: { onBack: () => void; onSaved: (id
                 Your Knowledge Base has no hotel, activity, or transfer rates for this destination yet.
                 Sync Gmail or add rates manually to build the itinerary.
               </p>
-              <a href="/knowledge-base" className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
+              <a href="/suppliers" className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
                 Go to Knowledge Base <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
