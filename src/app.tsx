@@ -15,7 +15,7 @@ import LeadTools        from "./pages/Leads";
 import Suppliers        from "./pages/suppliers";
 import Itineraries      from "./pages/ItinerariesLibrary";
 import Content          from "./pages/Content";
-import Chat             from "./pages/Chat";
+import Chat             from "./pages/TeamChat";
 import NotFound         from "./pages/Notfound";
 import CampaignDesign   from "./pages/CampaignDesigner";
 import ActiveTrips      from "./pages/ActiveTrips";

@@ -4,6 +4,7 @@
  * Start a message with /docs to answer only from documents, or /chat to ignore them.
  */
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Sparkles, X, Send, Paperclip, Loader2, Square } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { API_ROOT } from "@/lib/api";
@@ -23,6 +24,7 @@ export function AssistantPopup() {
   const { user, profile } = useAuth();
   const userName = profile?.full_name || user?.email?.split("@")[0] || "Team Member";
   const [open, setOpen] = useState(false);
+  const lift = useLocation().pathname === "/chat" ? 76 : 0; // stay clear of the chat send button
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -118,7 +120,7 @@ export function AssistantPopup() {
   return (
     <>
       {open && (
-        <div style={{ position: "fixed", right: 24, bottom: 94, width: 400, height: "min(640px, calc(100vh - 130px))", zIndex: 70,
+        <div style={{ position: "fixed", right: 24, bottom: 94 + lift, width: 400, height: "min(640px, calc(100vh - 130px))", zIndex: 70,
           background: t.PAPER, borderRadius: 20, boxShadow: "0 12px 40px rgba(11,59,61,.28)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ background: "#0B3B3D", color: "#F6F4EE", padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
             <Sparkles size={18} color="#D4AF5A" strokeWidth={1.6} />
@@ -157,7 +159,7 @@ export function AssistantPopup() {
         </div>
       )}
       <button onClick={() => setOpen(o => !o)} title="CH Assistant"
-        style={{ position: "fixed", right: 24, bottom: 24, width: 56, height: 56, borderRadius: 99, zIndex: 70, cursor: "pointer",
+        style={{ position: "fixed", right: 24, bottom: 24 + lift, width: 56, height: 56, borderRadius: 99, zIndex: 70, cursor: "pointer",
           background: "#0B3B3D", color: "#D4AF5A", border: "1.5px solid #D4AF5A", boxShadow: "4px 4px 12px rgba(0,0,0,.25)",
           display: "flex", alignItems: "center", justifyContent: "center" }}>
         {open ? <X size={22} /> : <Sparkles size={24} strokeWidth={1.6} />}
