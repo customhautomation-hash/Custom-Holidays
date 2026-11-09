@@ -8,15 +8,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
 /* ─────────────────────────────────────────────
    SUPABASE
 ───────────────────────────────────────────── */
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL  as string,
-  import.meta.env.VITE_SUPABASE_ANON_KEY as string,
-);
 
 const PAGE_SIZE = 50;
 

@@ -62,7 +62,7 @@ export default function ProfilePage() {
   };
   const resetPassword = async () => {
     if (!user?.email) return;
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.origin });
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, { redirectTo: `${window.location.origin}/reset-password` });
     setPw(error ? "Could not send the email, try again" : `Reset link sent to ${user.email}`);
   };
   const connectGmail = async () => {

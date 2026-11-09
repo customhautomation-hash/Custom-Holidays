@@ -3,7 +3,7 @@ import {
   IndianRupee, TrendingUp, CalendarClock, CalendarPlus, Megaphone,
   UserCircle2, Truck, ChevronDown, Briefcase, Plane, Palette, Wallet,
   Bot, Handshake, UserCheck, Sparkles, ImagePlus, ListTodo,
-  Zap, LogOut, FileSpreadsheet, Scale, BarChart3, Workflow, Ticket, Building2,
+  Zap, LogOut, LifeBuoy, FileSpreadsheet, Scale, BarChart3, Workflow, Ticket, Building2,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -181,9 +181,16 @@ export function DashboardSidebar() {
           ]} />
       </SidebarContent>
 
+      {/* Help */}
+      <div className="px-3 pt-2" style={{ background: t.BG, borderTop: `1px solid ${HAIRLINE}` }}>
+        <SidebarMenu>
+          <NavRow item={{ title: "Help", url: "/help", icon: LifeBuoy }} t={t} />
+        </SidebarMenu>
+      </div>
+
       {/* User footer */}
-      <div className="px-2 py-3 mt-auto flex items-center gap-1"
-        style={{ background: t.BG, borderTop: `1px solid ${HAIRLINE}` }}>
+      <div className="px-2 py-3 flex items-center gap-1"
+        style={{ background: t.BG }}>
         {user && (
           <button onClick={() => navigate("/profile")} title="Profile & settings"
             className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl px-2 py-1.5"

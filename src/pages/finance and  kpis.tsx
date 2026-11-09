@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   IndianRupee, TrendingUp, TrendingDown, Target, PieChart,
   DollarSign, Calendar, CheckCircle, Clock, Briefcase, Database,
-  Plus, Link,
+ 
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -63,30 +63,18 @@ function SkeletonCard({ label, icon: Icon, color }: { label: string; icon: React
 }
 
 // ── Empty / not-connected banner ──────────────────────────────────────────────
-function NotConnectedBanner() {
+function NotConnectedBanner({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-border bg-card p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center shrink-0">
-        <Database className="h-6 w-6 text-muted-foreground opacity-50" />
+    <div className="rounded-2xl bg-card p-8 flex flex-col items-center text-center gap-2" style={{ boxShadow: "var(--neu-shadow, none)" }}>
+      <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mb-1">
+        <Database className="h-6 w-6 text-muted-foreground opacity-60" />
       </div>
-      <div className="flex-1">
-        <p className="font-semibold text-foreground">No Finance Data Connected</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Connect Tally or post data from Supabase / n8n to populate this dashboard.
-          The endpoint is ready at{" "}
-          <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
-            POST {API}/finance-kpis
-          </code>
-        </p>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        <span className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-muted text-muted-foreground border border-border">
-          <Link className="h-3 w-3" /> Connect Tally
-        </span>
-        <span className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-muted text-muted-foreground border border-border">
-          <Plus className="h-3 w-3" /> Add Manual Entry
-        </span>
-      </div>
+      <p className="font-semibold text-foreground">No finance figures yet</p>
+      <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
+        Revenue, costs, profit and targets appear here once the month's numbers are sent from the accounts.
+        If they were sent already, the server may still be starting.
+      </p>
+      <button onClick={onRetry} className="mt-3 text-sm font-semibold px-4 h-9 rounded-xl text-white" style={{ background: "#13585B", border: "none", cursor: "pointer" }}>Check again</button>
     </div>
   );
 }
@@ -106,8 +94,8 @@ export default function FinanceKPIs() {
         fetch(`${API}/finance-kpis/latest`),
         fetch(`${API}/finance-entries`),
       ]);
-      const kpi = await kpiRes.json();
-      const transactions = await entryRes.json();
+      const kpi = kpiRes.ok ? await kpiRes.json().catch(() => null) : null;
+      const transactions = entryRes.ok ? await entryRes.json().catch(() => []) : [];
 
       if (kpi && kpi.revenue) {
         setFinance(kpi);
@@ -148,9 +136,11 @@ export default function FinanceKPIs() {
         {/* Not connected banner */}
         {!loading && !hasData && (
           <motion.div {...fade(0.05)}>
-            <NotConnectedBanner />
+            <NotConnectedBanner onRetry={loadDashboard} />
           </motion.div>
         )}
+
+        {(loading || hasData) && (<>
 
         {/* KPI CARDS — show skeletons when loading or no data */}
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -368,6 +358,7 @@ export default function FinanceKPIs() {
             </div>
           </motion.div>
         )}
+        </>)}
 
       </div>
     </DashboardLayout>

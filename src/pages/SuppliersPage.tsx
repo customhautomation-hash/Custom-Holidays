@@ -44,7 +44,7 @@ export default function SuppliersPage() {
   const load = async () => {
     setErr("");
     try { const d = await api("/gmail/suppliers-overview"); setData({ suppliers: d.suppliers || [], hotels: d.hotels || [], activities: d.activities || [], transfers: d.transfers || [], emails: d.emails || [] }); }
-    catch (e: any) { setErr(e?.message?.includes("Failed to fetch") ? "The server is waking up. This takes up to a minute on the free plan." : e?.message || "Could not load suppliers"); setTimeout(load, 15000); }
+    catch { setErr("Couldn't load suppliers just now"); setTimeout(load, 15000); }
   };
   const loadGmail = async () => { try { setGmail(await api("/gmail/status")); } catch { setGmail({ connected: false }); } };
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function SuppliersPage() {
         </div>
       </Card>
 
-      {err && !data && <Card><Empty title={err}><Loader2 size={16} className="animate-spin inline" /></Empty></Card>}
+      {err && !data && <Card><Empty title={err}><span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Trying again on its own. Nothing to do on your side</span></Empty></Card>}
       {data && <>
         <div className="flex gap-2 flex-wrap">
           {["All", ...TYPES].filter(k => k === "All" || counts[k]).map(k => (

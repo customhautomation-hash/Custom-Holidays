@@ -410,7 +410,7 @@ export default function QuoteGenerator() {
                 {saving ? <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
                   : saved ? <CheckCircle style={{ width: 14, height: 14 }} />
                   : <Save style={{ width: 14, height: 14 }} />}
-                {saved ? "Saved!" : "Save to Supabase"}
+                {saved ? "Saved" : "Save quote"}
               </button>
               <button
                 onClick={handlePrint}

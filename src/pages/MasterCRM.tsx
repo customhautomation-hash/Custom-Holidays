@@ -28,6 +28,7 @@ export default function MasterCRM() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [q, setQ] = useState("");
   const [view, setView] = useState<"all" | Status>("all");
   const [sel, setSel] = useState<string | null>(null);
@@ -36,7 +37,8 @@ export default function MasterCRM() {
   const PER = 15;
 
   const load = async () => {
-    setLoading(true);
+    setLoading(true); setFailed(false);
+    try {
     const [c, tr, b] = await Promise.all([
       supabase.from("contacts").select(`id, name, stage, source, met_where, destination, country, budget, contact_type, working_at, designation,
         created_at, last_contacted_at, deleted_at, contact_emails(email), contact_phones(phone_number)`).order("created_at", { ascending: false }),
@@ -49,7 +51,9 @@ export default function MasterCRM() {
     })));
     setTrips((tr.data as Trip[]) || []);
     setBookings((b.data as Booking[]) || []);
-    setLoading(false);
+    setFailed(!!c.error);
+    } catch { setFailed(true); }
+    finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
@@ -105,6 +109,7 @@ export default function MasterCRM() {
               </button>))}
           </div>
           {loading ? <Empty title="Loading clients"><Loader2 className="animate-spin inline" size={16} /></Empty> :
+           failed && !contacts.length ? <Empty title="Couldn't load clients" action={<Btn onClick={load}>Try again</Btn>}>Check the internet connection, then try again.</Empty> :
            !filtered.length ? <Empty title={q ? "No client matches that search" : "No clients yet"} action={!q && <Btn kind="primary" onClick={() => setAdding(true)}>Add the first client</Btn>} /> : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>

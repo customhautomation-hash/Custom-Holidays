@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,13 +33,31 @@ import VoucherGenerator from "./pages/VoucherGenerator";
 import PriceCompare     from "./pages/PriceCompare";
 import { AssistantPopup } from "@/components/dashboard/AssistantPopup";
 import { refreshPush } from "@/lib/push";
+import { installServerWake, warmUpServer } from "@/lib/serverWake";
+import { PageGuard, WakeNote } from "@/components/AppGuards";
+import Help             from "./pages/Help";
+import ResetPassword    from "./pages/ResetPassword";
+import { supabase } from "@/lib/supabase";
+
+// A password-reset link signs the person in; remember it so they land on "Choose a new password"
+const cameFromResetLink = typeof window !== "undefined" && /type=recovery/.test(window.location.hash + window.location.search);
+
+installServerWake();
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { session, loading } = useAuth();
-  useEffect(() => { if (session) refreshPush(); }, [!!session]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (cameFromResetLink && location.pathname !== "/reset-password") navigate("/reset-password", { replace: true });
+    const { data } = supabase.auth.onAuthStateChange(e => { if (e === "PASSWORD_RECOVERY") navigate("/reset-password", { replace: true }); });
+    return () => data.subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { if (session) { refreshPush().catch(() => {}); warmUpServer(); } }, [!!session]);
 
   if (loading) {
     return (
@@ -59,15 +77,20 @@ function AppRoutes() {
         <Route path="/login"   element={<Login />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms"   element={<Terms />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*"        element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
 
+  if (location.pathname === "/reset-password") return <ResetPassword />;
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full" style={{ background: "var(--neu-base, #F3EAEA)" }}>
         <DashboardSidebar />
+        <WakeNote />
+        <PageGuard resetKey={location.pathname}>
         <Routes>
           <Route path="/"                  element={<Index />} />
           <Route path="/login"             element={<Navigate to="/" replace />} />
@@ -90,6 +113,7 @@ function AppRoutes() {
           <Route path="/creatives"         element={<Creatives />} />
           <Route path="/finance-kpis"      element={<FinanceKPIs />} />
           <Route path="/profile"           element={<Profile />} />
+          <Route path="/help"              element={<Help />} />
           <Route path="/privacy"           element={<Privacy />} />
           <Route path="/terms"             element={<Terms />} />
           {/* old addresses still work */}
@@ -102,7 +126,8 @@ function AppRoutes() {
           <Route path="/rag"               element={<Navigate to="/" replace />} />
           <Route path="*"                  element={<NotFound />} />
         </Routes>
-        <AssistantPopup />
+        </PageGuard>
+        <PageGuard compact resetKey={location.pathname}><AssistantPopup /></PageGuard>
       </div>
     </SidebarProvider>
   );

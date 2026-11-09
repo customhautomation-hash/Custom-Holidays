@@ -587,7 +587,7 @@ export default function Suppliers() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-serif text-foreground">Supplier Contact Information</h1>
-            <p className="text-sm text-muted-foreground mt-1">Live from Supabase · {suppliers.length} suppliers</p>
+            <p className="text-sm text-muted-foreground mt-1">{suppliers.length} supplier contacts · import a spreadsheet or add one by hand</p>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />

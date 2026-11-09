@@ -37,7 +37,7 @@ interface Category {
 const initialCategories: Category[] = [
   {
     name: "Lead Analytics", icon: <BarChart2 className="h-4 w-4" />,
-    color: "text-blue-400", bgColor: "bg-blue-500/10 border-blue-500/20",
+    color: "text-[#13585B] dark:text-[#5FB3AE]", bgColor: "bg-[rgba(19,88,91,.06)] border-[rgba(19,88,91,.12)]",
     automations: [
       { id: 1,  name: "Instant Lead Response",       trigger: "webhook",   webhookPath: "lead-response",         remarks: "Merged with lead scoring & VIP alert", status: "idle", lastLog: [] },
       { id: 2,  name: "Lead Scoring & Routing",      trigger: "webhook",   webhookPath: "lead-scoring",          remarks: "Merged with lead response & VIP alert", status: "idle", lastLog: [] },
@@ -53,7 +53,7 @@ const initialCategories: Category[] = [
   },
   {
     name: "Web & Content", icon: <Globe className="h-4 w-4" />,
-    color: "text-teal-400", bgColor: "bg-teal-500/10 border-teal-500/20",
+    color: "text-[#13585B] dark:text-[#5FB3AE]", bgColor: "bg-[rgba(19,88,91,.06)] border-[rgba(19,88,91,.12)]",
     automations: [
       { id: 11, name: "Weekly SEO & Traffic Digest",       trigger: "not-built", remarks: "After website launch", status: "idle", lastLog: [] },
       { id: 12, name: "Competitor Price Monitor",          trigger: "not-built", remarks: "After website launch", status: "idle", lastLog: [] },
@@ -69,7 +69,7 @@ const initialCategories: Category[] = [
   },
   {
     name: "Supplier", icon: <Package className="h-4 w-4" />,
-    color: "text-amber-400", bgColor: "bg-amber-500/10 border-amber-500/20",
+    color: "text-[#13585B] dark:text-[#5FB3AE]", bgColor: "bg-[rgba(19,88,91,.06)] border-[rgba(19,88,91,.12)]",
     automations: [
       { id: 21, name: "Supplier Rate Change Monitor",  trigger: "not-built", remarks: "To create", status: "idle", lastLog: [] },
       { id: 22, name: "Supplier Follow-up",            trigger: "not-built", status: "idle", lastLog: [] },
@@ -82,7 +82,7 @@ const initialCategories: Category[] = [
   },
   {
     name: "House", icon: <Home className="h-4 w-4" />,
-    color: "text-emerald-400", bgColor: "bg-emerald-500/10 border-emerald-500/20",
+    color: "text-[#13585B] dark:text-[#5FB3AE]", bgColor: "bg-[rgba(19,88,91,.06)] border-[rgba(19,88,91,.12)]",
     automations: [
       { id: 31, name: "Daily Booking & Revenue Digest",       trigger: "scheduled", webhookPath: "daily-digest",         remarks: "Merged with lead pipeline digest", status: "idle", lastLog: [] },
       { id: 32, name: "Agent Task Auto-Scheduler",            trigger: "not-built", status: "idle", lastLog: [] },
@@ -102,24 +102,30 @@ const initialCategories: Category[] = [
   },
   {
     name: "Revenue", icon: <TrendingUp className="h-4 w-4" />,
-    color: "text-teal-400", bgColor: "bg-teal-500/10 border-teal-500/20",
+    color: "text-[#13585B] dark:text-[#5FB3AE]", bgColor: "bg-[rgba(19,88,91,.06)] border-[rgba(19,88,91,.12)]",
     automations: [
       { id: 50, name: "Year-End Client Report Mailer", trigger: "not-built", remarks: "To create", status: "idle", lastLog: [] },
     ],
   },
 ];
 
+// Staff only see automations that actually run, with plain-language notes
+const LIVE_CATEGORIES: Category[] = initialCategories
+  .map(c => ({ ...c, automations: c.automations.filter(a => a.trigger !== "not-built").map(a => ({ ...a,
+    remarks: a.remarks === "Needs WhatsApp API" ? "Starts once WhatsApp is connected" : a.remarks === "Needs Tally integration" ? "Starts once the accounts are connected" : undefined })) }))
+  .filter(c => c.automations.length > 0);
+
 // ─── Trigger badge ────────────────────────────────────────────────────────────
 const TriggerBadge = ({ t }: { t: TriggerType }) => {
   if (t === "webhook")
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400">
-        <Webhook className="h-2.5 w-2.5" /> Webhook
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full " style={{ background: "rgba(19,88,91,.10)", color: "#13585B" }}>
+        <Webhook className="h-2.5 w-2.5" /> On event
       </span>
     );
   if (t === "scheduled")
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400">
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full " style={{ background: "rgba(184,145,62,.14)", color: "#8A6A24" }}>
         <Clock className="h-2.5 w-2.5" /> Scheduled
       </span>
     );
@@ -270,7 +276,7 @@ const AutomationRow = ({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 const Automations = () => {
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [categories, setCategories] = useState<Category[]>(LIVE_CATEGORIES);
   const [activeTab, setActiveTab]   = useState(0);
 
   const updateAutomation = (id: number, patch: Partial<Automation>) =>
@@ -409,17 +415,14 @@ const Automations = () => {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-[1480px] mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-4 w-4 text-accent" />
-              <h1 className="text-xl font-semibold text-foreground">Automations</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Trigger and monitor all automations from one place.
+            <h1 className="font-serif" style={{ fontSize: 30, margin: 0 }}>Automations</h1>
+            <p className="text-muted-foreground" style={{ fontSize: 13, marginTop: 4 }}>
+              Jobs that run on their own. Anything that goes to a client waits for approval first.
             </p>
           </div>
 
@@ -452,7 +455,7 @@ const Automations = () => {
                     ? "bg-muted text-muted-foreground"
                     : "bg-muted/50 text-muted-foreground/60"
                 }`}>
-                  {s.built}/{s.total}
+                  {s.total}
                 </span>
 
                 {/* Live status dots */}
@@ -478,13 +481,10 @@ const Automations = () => {
         {/* Legend */}
         <div className="flex items-center gap-5 text-[11px] text-muted-foreground flex-wrap">
           <div className="flex items-center gap-1.5">
-            <Webhook className="h-3 w-3 text-blue-400" /> Webhook — trigger manually anytime
+            <Webhook className="h-3 w-3" /> Runs when something happens, or press Run
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3 text-amber-400" /> Scheduled — runs automatically, manual trigger available
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Construction className="h-3 w-3 text-zinc-500" /> Not built yet
+            <Clock className="h-3 w-3" /> Runs on a schedule, or press Run
           </div>
         </div>
 
@@ -505,7 +505,7 @@ const Automations = () => {
                 {activeCategory.name}
               </span>
               <span className="text-xs text-muted-foreground ml-1">
-                — {tabStats(activeCategory).built} of {tabStats(activeCategory).total} automations built
+                · {tabStats(activeCategory).total} running
               </span>
             </div>
 

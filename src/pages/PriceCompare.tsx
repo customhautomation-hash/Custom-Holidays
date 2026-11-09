@@ -277,8 +277,10 @@ export default function PriceCompare() {
     if (ccy === "INR") { setT({ roe: "1", roeNote: "" }); return; }
     setRoeBusy(true); setRoeErr("");
     try {
-      const r = await (await authFetch(`/roe?ccy=${ccy}`)).json();
-      setTrip(t => (t.currency !== ccy ? t : { ...t, roe: String(r.roe), roeNote: `${r.source} · ${r.date}${r.stale ? " (last known)" : ""}` }));
+      const res = await authFetch(`/roe?ccy=${ccy}`);
+      const r = res.ok ? await res.json() : null;
+      if (!r || !Number(r.roe)) throw new Error("Couldn't fetch today's rate. Type it in");
+      setTrip(t => (t.currency !== ccy ? t : { ...t, roe: String(r.roe), roeNote: [r.source, r.date].filter(Boolean).join(" · ") + (r.stale ? " (last known)" : "") }));
     } catch (e: any) { setRoeErr(e.message); }
     finally { setRoeBusy(false); }
   };

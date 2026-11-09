@@ -19,19 +19,23 @@ export default function ActiveTrips() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vouchers, setVouchers] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const load = async () => {
-    setLoading(true);
-    const { data } = await supabase.from("trips").select("id, trip_id, name, client, status, start_date, end_date, places, project_lead, budget").order("start_date", { ascending: true });
+    setLoading(true); setFailed(false);
+    try {
+    const { data, error } = await supabase.from("trips").select("id, trip_id, name, client, status, start_date, end_date, places, project_lead, budget").order("start_date", { ascending: true });
     setTrips((data as Trip[]) || []);
+    setFailed(!!error);
     const v = await supabase.from("vouchers").select("client, trip_name");
     if (!v.error && v.data) {
       const m: Record<string, number> = {};
       (v.data as any[]).forEach(r => { const k = norm(r.trip_name || r.client); m[k] = (m[k] || 0) + 1; });
       setVouchers(m);
     }
-    setLoading(false);
+    } catch { setFailed(true); }
+    finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
@@ -76,6 +80,7 @@ export default function ActiveTrips() {
       sub={loading ? "Loading trips" : `${active} booked trip${active === 1 ? "" : "s"} · ${soon} leave in the next 14 days · ${by["Travelling now"].length} travelling now`}
       actions={<Btn kind="primary" onClick={() => setAdding(true)}><Plus size={15} />New trip</Btn>}>
       {loading ? <Card><Empty title="Loading trips"><Loader2 className="animate-spin inline" size={16} /></Empty></Card> :
+       failed && !trips.length ? <Card><Empty title="Couldn't load trips" action={<Btn onClick={load}>Try again</Btn>}>Check the internet connection, then try again.</Empty></Card> :
        !active ? <Card><Empty title="No booked trips right now" action={<Btn kind="primary" onClick={() => setAdding(true)}>Add a trip</Btn>}>Trips with status Confirmed or Ongoing and upcoming dates show up here.</Empty></Card> : (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, minmax(0,1fr))" }}>
           {COLS.map(c => (

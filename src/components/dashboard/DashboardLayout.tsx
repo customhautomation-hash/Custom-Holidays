@@ -1,26 +1,16 @@
 import { SidebarTrigger } from "../../components/ui/sidebar";
-import { Bell, RefreshCw, Moon, Sun, X, CheckCheck, Info, AlertTriangle } from "lucide-react";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { RefreshCw, Moon, Sun, HelpCircle } from "lucide-react";
+import { useState, useCallback } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useDarkMode } from "../../hooks/useDarkMode";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { STAFF } from "../../lib/helpContent";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationsBell } from "./Notifications";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
-
-interface Notification {
-  id: number;
-  type: "info" | "success" | "warning";
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
-const INITIAL_NOTIFICATIONS: Notification[] = [];
 
 function getInitials(name?: string | null, email?: string | null): string {
   if (name?.trim()) {
@@ -32,18 +22,12 @@ function getInitials(name?: string | null, email?: string | null): string {
   return "??";
 }
 
-const typeStyles = {
-  info:    { icon: <Info style={{ width: 13, height: 13 }} />,        bg: "#EAF2F1", color: "#0B3B3D" },
-  success: { icon: <CheckCheck style={{ width: 13, height: 13 }} />,  bg: "#EEFAF4", color: "#2E9E6B" },
-  warning: { icon: <AlertTriangle style={{ width: 13, height: 13 }} />, bg: "#FEF6EB", color: "#D48A2E" },
-};
-
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [refreshing, setRefreshing] = useState(false);
-  const [notifOpen, setNotifOpen]   = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // The ? button opens the Help section for the page you're on
+  const helpTopic = (STAFF.find(s => s.route && s.route !== "/" && pathname.startsWith(s.route)) || (pathname === "/" ? STAFF.find(s => s.route === "/") : undefined))?.id;
 
   const { user, profile }        = useAuth();
   const { dark, toggle: toggleDark } = useDarkMode();
@@ -63,26 +47,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const initials    = getInitials(profile?.full_name, user?.email);
   const displayName = profile?.full_name ?? user?.email ?? "User";
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 800);
     window.location.reload();
   }, []);
-
-  const markAllRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  const markRead    = (id: number) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  const dismiss     = (id: number) => setNotifications(prev => prev.filter(n => n.id !== id));
-
-  useEffect(() => {
-    if (!notifOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [notifOpen]);
 
   const btnStyle: React.CSSProperties = {
     background: BG, boxShadow: SHADOW_OUT, color: TEXT_MUTED,
@@ -106,6 +76,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         <div className="flex items-center gap-3">
+
+          {/* Help for this page */}
+          {pathname !== "/help" && (
+            <button onClick={() => navigate(helpTopic ? `/help?topic=${helpTopic}` : "/help")} title="Help for this page" aria-label="Help for this page" style={btnStyle}>
+              <HelpCircle style={{ width: 16, height: 16 }} />
+            </button>
+          )}
 
           {/* Dark / Light toggle */}
           <button onClick={toggleDark} title={dark ? "Light mode" : "Dark mode"} style={btnStyle}>
