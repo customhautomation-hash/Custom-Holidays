@@ -1,7 +1,7 @@
 /** One chat bubble with its hover menu: reply, react, copy, forward, star, pin, edit, delete, info. */
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Star, Pin, FileText, Download, Check, CheckCheck, Forward, Clock, AlertCircle } from "lucide-react";
-import { Msg, Attachment, QUICK, timeOf, fileUrl, fileSize, EDIT_MINUTES, DELETE_HOURS } from "./chatLib";
+import { ChevronDown, Star, Pin, FileText, Download, Check, CheckCheck, Forward, Clock, AlertCircle, Play } from "lucide-react";
+import { Msg, Attachment, QUICK, timeOf, fileUrl, fileSize, EDIT_MINUTES, DELETE_HOURS, mediaItems, thumbOf, fmtDuration } from "./chatLib";
 import { T } from "@/components/ch/kit";
 
 export function useFileUrl(a?: Attachment | null) {
@@ -19,13 +19,40 @@ function RichText({ text, names, t }: { text: string; names: string[]; t: T }) {
         ? <b key={j} style={{ color: t.TEAL, fontWeight: 600 }}>{s}</b> : s)}</span>)}</>;
 }
 
-export function AttachmentView({ a, kind, t, onImage }: { a: Attachment; kind: string; t: T; onImage: (url: string) => void }) {
-  const url = useFileUrl(a);
+/** Photos and videos shown right in the chat, like WhatsApp: one big, or a grid for several. */
+export function MediaTile({ a, t, w, h, more, onOpen }: { a: Attachment; t: T; w: number | string; h: number; more?: number; onOpen: () => void }) {
+  const th = thumbOf(a); const url = useFileUrl(th);
+  const video = a.mime.startsWith("video/");
+  return (
+    <div onClick={onOpen} style={{ position: "relative", width: w, height: h, borderRadius: 8, overflow: "hidden", cursor: "pointer", background: t.dark ? "#16434A" : "#E2D6D7" }}>
+      {url ? <img src={url} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        : video ? null : <div className="animate-pulse" style={{ width: "100%", height: "100%" }} />}
+      {video && <>
+        <span style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 48, height: 48, borderRadius: 99, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center" }}><Play size={22} color="#fff" fill="#fff" /></span>
+        {a.duration !== undefined && <span style={{ position: "absolute", left: 8, bottom: 6, fontSize: 11, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.6)" }}>▶ {fmtDuration(a.duration)}</span>}
+      </>}
+      {!!more && <span style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.45)", color: "#fff", fontSize: 26, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>+{more}</span>}
+    </div>);
+}
+export function MediaGrid({ items, t, onOpen }: { items: Attachment[]; t: T; onOpen: (i: number) => void }) {
+  if (items.length === 1) {
+    const a = items[0]; const W = 300; const r = a.width && a.height ? a.height / a.width : 0.75;
+    const h = Math.round(Math.min(380, Math.max(150, W * r))); const w = r ? Math.round(Math.min(W, h / r)) : W;
+    return <MediaTile a={a} t={t} w={Math.max(w, 180)} h={h} onOpen={() => onOpen(0)} />;
+  }
+  const show = items.slice(0, 4); const more = items.length - 4;
+  if (items.length === 3) return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "150px 150px", gap: 3, width: 300 }}>
+    <div style={{ gridRow: "span 2" }}><MediaTile a={show[0]} t={t} w="100%" h={303} onOpen={() => onOpen(0)} /></div>
+    <MediaTile a={show[1]} t={t} w="100%" h={150} onOpen={() => onOpen(1)} /><MediaTile a={show[2]} t={t} w="100%" h={150} onOpen={() => onOpen(2)} /></div>;
+  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3, width: 300 }}>
+    {show.map((a, i) => <MediaTile key={i} a={a} t={t} w="100%" h={items.length === 2 ? 200 : 148} more={i === 3 && more > 0 ? more : undefined} onOpen={() => onOpen(i)} />)}</div>;
+}
+
+export function AttachmentView({ a, kind, t, onOpen }: { a: Attachment; kind: string; t: T; onOpen: (i: number) => void }) {
+  const media = mediaItems(a);
+  const url = useFileUrl(media.length ? null : a);
+  if (media.length) return <MediaGrid items={media} t={t} onOpen={onOpen} />;
   if (kind === "voice" || a.mime?.startsWith("audio/")) return <audio controls src={url || undefined} style={{ width: 260, height: 36, display: "block" }} />;
-  if (a.mime?.startsWith("image/")) return url
-    ? <img src={url} alt={a.name} onClick={() => onImage(url)} style={{ display: "block", maxWidth: 300, maxHeight: 300, borderRadius: 10, cursor: "zoom-in", objectFit: "cover" }} />
-    : <div style={{ width: 240, height: 160, borderRadius: 10, background: t.dark ? "#16434A" : "#E8DADB" }} />;
-  if (a.mime?.startsWith("video/")) return <video controls src={url || undefined} style={{ maxWidth: 300, borderRadius: 10, display: "block" }} />;
   return (
     <a href={url ? `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(a.name)}` : undefined} target="_blank" rel="noreferrer"
       className="flex items-center gap-3" style={{ padding: "8px 10px", borderRadius: 10, background: t.dark ? "rgba(0,0,0,.18)" : "rgba(19,88,91,.07)", color: "inherit", textDecoration: "none", minWidth: 220 }}>
@@ -38,7 +65,7 @@ export function AttachmentView({ a, kind, t, onImage }: { a: Attachment; kind: s
 
 export type BubbleActions = {
   reply: () => void; react: (e: string) => void; copy: () => void; forward: () => void; star: () => void; pin: () => void;
-  edit: () => void; delMe: () => void; delAll: () => void; info: () => void; jump: (id: string) => void; image: (url: string) => void;
+  edit: () => void; delMe: () => void; delAll: () => void; info: () => void; jump: (id: string) => void; image: (index: number) => void;
 };
 
 export function MessageBubble({ m, mine, t, showName, senderName, color, quoted, quotedName, ticks, myId, names, highlight, a }: {
@@ -70,7 +97,7 @@ export function MessageBubble({ m, mine, t, showName, senderName, color, quoted,
     <div id={`msg-${m.id}`} className="flex" style={{ justifyContent: mine ? "flex-end" : "flex-start", padding: "1px 0" }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <div ref={ref} style={{ position: "relative", maxWidth: "68%", minWidth: 90 }}>
-        <div style={{ background: bg, borderRadius: mine ? "14px 4px 14px 14px" : "4px 14px 14px 14px", padding: m.attachment && !m.text && m.attachment.mime?.startsWith("image/") ? 4 : "7px 10px 6px",
+        <div style={{ position: "relative", background: bg, borderRadius: mine ? "14px 4px 14px 14px" : "4px 14px 14px 14px", padding: mediaItems(m.attachment).length && !m.deleted_at ? 3 : "7px 10px 6px",
           boxShadow: "0 1px 1.5px rgba(11,59,61,.13)", color: t.INK, fontSize: 13.5, lineHeight: 1.45 }}>
           {showName && !mine && <div style={{ fontSize: 12, fontWeight: 600, color, marginBottom: 2, padding: m.attachment && !m.text ? "4px 6px 0" : 0 }}>{senderName}</div>}
           {m.forwarded && !m.deleted_at && <div className="flex items-center gap-1" style={{ fontSize: 11, color: t.MUTED, fontStyle: "italic", marginBottom: 2 }}><Forward size={11} />Forwarded</div>}
@@ -79,10 +106,12 @@ export function MessageBubble({ m, mine, t, showName, senderName, color, quoted,
               <div style={{ fontSize: 11.5, fontWeight: 600, color: t.TEAL }}>{quotedName}</div>
               <div style={{ fontSize: 12, color: t.MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 320 }}>{quoted.deleted_at ? "This message was deleted" : quoted.text || (quoted.kind === "voice" ? "🎤 Voice message" : `📎 ${quoted.attachment?.name || "File"}`)}</div>
             </div>}
-            {m.attachment && <div style={{ marginBottom: m.text ? 5 : 0 }}><AttachmentView a={m.attachment} kind={m.kind} t={t} onImage={a.image} /></div>}
-            {m.text && <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{hl(m.text)}</span>}
+            {m.attachment && <div style={{ marginBottom: m.text ? 5 : 0 }}><AttachmentView a={m.attachment} kind={m.kind} t={t} onOpen={a.image} /></div>}
+            {m.text && <span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", display: mediaItems(m.attachment).length ? "block" : "inline", padding: mediaItems(m.attachment).length ? "2px 7px 0" : 0, maxWidth: 300 }}>{hl(m.text)}</span>}
           </>}
-          <span className="inline-flex items-center gap-1" style={{ float: "right", fontSize: 10.5, color: t.MUTED, margin: "6px 0 -2px 10px", padding: m.attachment && !m.text ? "0 6px 2px" : 0 }}>
+          <span className="inline-flex items-center gap-1" style={mediaItems(m.attachment).length && !m.text && !m.deleted_at
+            ? { position: "absolute", right: 10, bottom: 8, fontSize: 10.5, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,.7)", background: "rgba(0,0,0,.25)", borderRadius: 8, padding: "1px 6px" }
+            : { float: "right", fontSize: 10.5, color: t.MUTED, margin: "6px 0 -2px 10px", padding: mediaItems(m.attachment).length ? "0 6px 2px" : 0 }}>
             {m.pinned_at && <Pin size={10} />}{starred && <Star size={10} fill="currentColor" />}{m.edited_at && !m.deleted_at && <span>edited</span>}{timeOf(m.created_at)}
             {mine && !m.deleted_at && (ticks === "pending" ? <Clock size={12} /> : ticks === "failed" ? <AlertCircle size={12} color={t.RED} /> :
               ticks === "sent" ? <Check size={14} /> : <CheckCheck size={14} color={ticks === "all" ? "#34B7F1" : undefined} />)}

@@ -7,14 +7,15 @@
  * (run supabase/team_chat.sql once).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, Users, Paperclip, Smile, Send, Mic, Square, X, Star, Pin, Info, Pencil, Reply, Loader2, ArrowLeft, Trash2, UserPlus, LogOut } from "lucide-react";
+import { Image as ImageIcon, Search, Plus, Users, Paperclip, Smile, Send, Mic, Square, X, Star, Pin, Info, Pencil, Reply, Loader2, ArrowLeft, Trash2, UserPlus, LogOut } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useT, Btn, Field } from "@/components/ch/kit";
-import { MessageBubble } from "@/components/chat/MessageBubble";
+import { MessageBubble, useFileUrl } from "@/components/chat/MessageBubble";
+import { MediaComposer, MediaViewer, ViewItem } from "@/components/chat/Media";
 import {
-  Msg, Room, Read, Profile, norm, dmId, initials, timeOf, dayLabel, listTime, preview, uploadFile, EMOJIS,
+  Msg, Room, Read, Profile, Attachment, norm, dmId, initials, timeOf, dayLabel, listTime, preview, uploadFile, uploadMedia, mediaItems, thumbOf, EMOJIS,
 } from "@/components/chat/chatLib";
 
 const COLORS = ["#13585B", "#B8913E", "#7A4E9C", "#C0563E", "#2E7D5B", "#3B6FA8", "#A23B6A", "#5D6B2E"];
@@ -41,7 +42,8 @@ export default function TeamChat() {
   const [inQ, setInQ] = useState<string | null>(null);
   const [panel, setPanel] = useState<null | "info" | "starred" | { msgInfo: Msg }>(null);
   const [dialog, setDialog] = useState<null | "newChat" | "newGroup" | { forward: Msg }>(null);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ list: ViewItem[]; i: number } | null>(null);
+  const [draft, setDraft] = useState<File[] | null>(null);
 
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<Msg | null>(null);
@@ -206,14 +208,37 @@ export default function TeamChat() {
     if (!had) r[e] = [...(r[e] || []), me];
     patch(m, { reactions: r });
   };
+  // photos and videos open the preview first (caption, add more, remove); other files go straight away
   const sendFiles = async (files: FileList | File[] | null, caption = "") => {
     if (!files) return;
-    for (const f of Array.from(files)) {
+    const all = Array.from(files);
+    const media = all.filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    const docs = all.filter(f => !media.includes(f));
+    if (media.length) setDraft(d => [...(d || []), ...media]);
+    for (const f of docs) {
       const id = Math.random().toString(36).slice(2); setUploads(u => [...u, { id, name: f.name }]);
       try { const a = await uploadFile(active, f, f.name, f.type || "application/octet-stream"); await sendRow({ kind: "file", attachment: a, text: caption }); setUploads(u => u.filter(x => x.id !== id)); }
       catch (e: any) { setUploads(u => u.map(x => x.id === id ? { ...x, error: e?.message || "Upload failed" } : x)); }
     }
     if (fileRef.current) fileRef.current.value = "";
+  };
+  const sendAlbum = async (files: File[], caption: string) => {
+    setDraft(null);
+    const id = Math.random().toString(36).slice(2);
+    const label = files.length > 1 ? `${files.length} photos and videos` : files[0].name;
+    setUploads(u => [...u, { id, name: label }]);
+    try {
+      const items: Attachment[] = [];
+      for (const [n, f] of files.entries()) { setUploads(u => u.map(x => x.id === id ? { ...x, name: files.length > 1 ? `${n + 1} of ${files.length}` : label } : x)); items.push(await uploadMedia(active, f)); }
+      const attachment: Attachment = items.length === 1 ? items[0] : { name: label, size: items.reduce((s, a) => s + a.size, 0), mime: "album", items };
+      await sendRow({ kind: "media", attachment, text: caption.trim(), mentions: mentionsIn(caption) });
+      setUploads(u => u.filter(x => x.id !== id));
+    } catch (e: any) { setUploads(u => u.map(x => x.id === id ? { ...x, error: /exceeded|too large|413/i.test(e?.message || "") ? "This file is too big (limit 50 MB)" : e?.message || "Upload failed" } : x)); }
+  };
+  const openViewer = (m: Msg, index: number) => {
+    const list: ViewItem[] = []; let at = 0;
+    shown.filter(x => !x.deleted_at).forEach(x => mediaItems(x.attachment).forEach((a, k) => { if (x.id === m.id && k === index) at = list.length; list.push({ a, m: x, who: nameOf(x.sender_id, x.sender) }); }));
+    setViewer({ list, i: at });
   };
   const startRec = async () => {
     try {
@@ -353,7 +378,7 @@ export default function TeamChat() {
                       edit: () => { setEditing(m); setReplyTo(null); setText(m.text || ""); inputRef.current?.focus(); },
                       delMe: () => patch(m, { deleted_for: [...m.deleted_for, me] }),
                       delAll: () => { if (confirm("Delete this message for everyone?")) patch(m, { deleted_at: new Date().toISOString(), text: "", attachment: null, reactions: {}, pinned_at: null }); },
-                      info: () => setPanel({ msgInfo: m }), jump, image: setLightbox,
+                      info: () => setPanel({ msgInfo: m }), jump, image: (i: number) => openViewer(m, i),
                     }} />
                 </div>);
             })}
@@ -388,8 +413,10 @@ export default function TeamChat() {
             ) : (
               <div className="flex items-end gap-2">
                 <IconBtn t={t} title="Emoji" onClick={() => setEmoji(v => !v)}><Smile size={20} /></IconBtn>
-                <IconBtn t={t} title="Attach photos or files" onClick={() => fileRef.current?.click()}><Paperclip size={19} /></IconBtn>
+                <IconBtn t={t} title="Photos and videos" onClick={() => document.getElementById("ch-media-input")?.click()}><ImageIcon size={19} /></IconBtn>
+                <IconBtn t={t} title="Documents and other files" onClick={() => fileRef.current?.click()}><Paperclip size={19} /></IconBtn>
                 <input ref={fileRef} type="file" multiple hidden onChange={e => sendFiles(e.target.files)} />
+                <input id="ch-media-input" type="file" multiple accept="image/*,video/*" hidden onChange={e => { sendFiles(e.target.files); e.target.value = ""; }} />
                 <textarea ref={inputRef} value={text} rows={1} placeholder="Type a message"
                   onChange={e => { onType(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(140, e.target.scrollHeight) + "px"; }}
                   onKeyDown={e => {
@@ -397,7 +424,7 @@ export default function TeamChat() {
                     if (e.key === "Escape") { setReplyTo(null); setEditing(null); setEmoji(false); }
                     if (e.key === "ArrowUp" && !text) { const last = [...shown].reverse().find(m => isMine(m) && m.text && !m.deleted_at && !m.attachment); if (last && Date.now() - new Date(last.created_at).getTime() < 15 * 60000) { e.preventDefault(); setEditing(last); setText(last.text || ""); } }
                   }}
-                  onPaste={e => { const f = Array.from(e.clipboardData.files || []); if (f.length) { e.preventDefault(); sendFiles(f, text.trim()); setText(""); } }}
+                  onPaste={e => { const f = Array.from(e.clipboardData.files || []); if (f.length) { e.preventDefault(); sendFiles(f); } }}
                   style={{ flex: 1, resize: "none", minHeight: 42, maxHeight: 140, borderRadius: 14, boxShadow: t.IN, border: "none", outline: "none", background: t.BG, color: t.INK, padding: "11px 14px", fontSize: 13.5, fontFamily: "inherit", lineHeight: 1.4 }} />
                 {text.trim() ? <button onClick={submit} title={editing ? "Save" : "Send"} style={sendStyle(t)}>{editing ? <Pencil size={16} /> : <Send size={17} />}</button>
                   : <button onClick={startRec} title="Record a voice message" style={sendStyle(t)}><Mic size={18} /></button>}
@@ -415,7 +442,7 @@ export default function TeamChat() {
             {panel === "info" && <InfoPanel t={t} room={room} name={roomName(room)} me={me} profiles={profiles} online={online} msgs={shown}
               onRename={n => updateRoom({ name: n })} onDescribe={d => updateRoom({ description: d })}
               onMembers={ids => updateRoom({ members: ids })} onLeave={async () => { await updateRoom({ members: (room.members || profiles.map(p => p.id)).filter(x => x !== me) }); setActive("General"); }}
-              onImage={setLightbox} />}
+              onImage={(m: Msg, i: number) => openViewer(m, i)} />}
             {panel === "starred" && <div style={{ padding: 12 }}>{shown.filter(m => m.starred_by.includes(me) && !m.deleted_at).map(m => (
               <button key={m.id} onClick={() => jump(m.id)} className="w-full text-left" style={{ display: "block", padding: "10px 8px", border: "none", borderBottom: `1px solid ${t.LINE}`, background: "none", cursor: "pointer", color: t.INK }}>
                 <div style={{ fontSize: 12, color: t.MUTED }}>{nameOf(m.sender_id, m.sender)} · {dayLabel(m.created_at)} {timeOf(m.created_at)}</div>
@@ -435,9 +462,10 @@ export default function TeamChat() {
       {dialog === "newChat" && <PickDialog t={t} title="New chat" people={profiles.filter(p => p.id !== me)} onClose={() => setDialog(null)} onPick={ids => { const p = profiles.find(x => x.id === ids[0]); if (p) openDm(p); }} single />}
       {dialog === "newGroup" && <PickDialog t={t} title="New group" people={profiles.filter(p => p.id !== me)} onClose={() => setDialog(null)} group onCreate={createGroup} />}
       {dialog && typeof dialog === "object" && <ForwardDialog t={t} rooms={list.map(x => ({ id: x.r.id, name: x.name }))} onClose={() => setDialog(null)} onSend={ids => forwardTo(dialog.forward, ids)} />}
-      {lightbox && <div onClick={() => setLightbox(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
-        <img src={lightbox} alt="" style={{ maxWidth: "92vw", maxHeight: "90vh", borderRadius: 8 }} />
-        <a href={lightbox} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 20, right: 24, color: "#fff", fontSize: 13 }}>Open full size</a></div>}
+      {draft && <MediaComposer t={t} files={draft} chatName={room ? roomName(room) : "General"} onAdd={f => setDraft(d => [...(d || []), ...f])}
+        onRemove={i => setDraft(d => { const n = (d || []).filter((_, k) => k !== i); return n.length ? n : null; })} onClose={() => setDraft(null)} onSend={sendAlbum} />}
+      {viewer && <MediaViewer t={t} list={viewer.list} index={viewer.i} onIndex={i => setViewer(v => v && { ...v, i })} onClose={() => setViewer(null)}
+        onReply={m => { setViewer(null); setReplyTo(m); inputRef.current?.focus(); }} onForward={m => { setViewer(null); setDialog({ forward: m }); }} />}
     </DashboardLayout>
   );
 }
@@ -459,7 +487,9 @@ function InfoPanel({ t, room, name, me, profiles, online, msgs, onRename, onDesc
   const [nm, setNm] = useState(name); const [desc, setDesc] = useState(room.description || ""); const [adding, setAdding] = useState(false);
   useEffect(() => { setNm(name); setDesc(room.description || ""); }, [room.id]);
   const members: string[] = room.members?.length ? room.members : profiles.map((p: Profile) => p.id);
-  const media = msgs.filter((m: Msg) => m.attachment && !m.deleted_at).slice(-9).reverse();
+  const media: { m: Msg; a: Attachment; i: number }[] = [];
+  msgs.filter((m: Msg) => m.attachment && !m.deleted_at).forEach((m: Msg) => (mediaItems(m.attachment).length ? mediaItems(m.attachment) : [m.attachment!]).forEach((a, i) => media.push({ m, a, i })));
+  media.reverse(); media.splice(9);
   const nameOf = (id: string) => id === me ? "You" : profiles.find((p: Profile) => p.id === id)?.full_name || "Someone";
   return <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
     <div style={{ textAlign: "center" }}><Avatar t={t} id={room.kind === "dm" ? members.find(x => x !== me) : room.id} label={name} group={room.kind === "group"} size={84} /></div>
@@ -468,7 +498,7 @@ function InfoPanel({ t, room, name, me, profiles, online, msgs, onRename, onDesc
       <div><div style={{ fontSize: 12, color: t.MUTED, marginBottom: 4 }}>Description</div><div className="flex gap-2"><Field value={desc} onChange={setDesc} placeholder="Add a description" style={{ flex: 1, height: 34 }} />{desc !== (room.description || "") && <Btn onClick={() => onDescribe(desc)} style={{ height: 34 }}>Save</Btn>}</div></div>
     </> : <div style={{ textAlign: "center" }}><b style={{ fontSize: 16 }}>{name}</b><div style={{ fontSize: 12, color: t.MUTED }}>{online.has(members.find((x: string) => x !== me)) ? "online" : ""}</div></div>}
     {!!media.length && <div><div style={{ fontSize: 12, color: t.MUTED, marginBottom: 6 }}>Media and files</div>
-      <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>{media.map((m: Msg) => <MediaThumb key={m.id} t={t} m={m} onImage={onImage} />)}</div></div>}
+      <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>{media.map(x => <MediaThumb key={x.m.id + x.i} t={t} m={x.m} a={x.a} onOpen={() => onImage(x.m, x.i)} />)}</div></div>}
     {room.kind === "group" && <div>
       <div className="flex justify-between items-center" style={{ marginBottom: 6 }}><span style={{ fontSize: 12, color: t.MUTED }}>{room.members?.length ? `${members.length} members` : "Everyone on the team"}</span>
         {room.members?.length ? <button onClick={() => setAdding(a => !a)} className="flex items-center gap-1" style={{ background: "none", border: "none", color: t.TEAL, fontWeight: 600, fontSize: 12, cursor: "pointer" }}><UserPlus size={14} />Add</button> : null}</div>
@@ -481,11 +511,14 @@ function InfoPanel({ t, room, name, me, profiles, online, msgs, onRename, onDesc
     </div>}
   </div>;
 }
-function MediaThumb({ t, m, onImage }: any) {
-  const [url, setUrl] = useState("");
-  useEffect(() => { import("@/components/chat/chatLib").then(l => l.fileUrl(m.attachment).then(setUrl)); }, [m.id]);
-  return m.attachment.mime?.startsWith("image/") ? <img src={url || undefined} onClick={() => url && onImage(url)} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, cursor: "pointer", background: t.LINE }} />
-    : <a href={url || undefined} target="_blank" rel="noreferrer" style={{ aspectRatio: "1", borderRadius: 6, background: t.dark ? "#16434A" : "#E3EFEE", color: t.TEAL, fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 4, textAlign: "center", overflow: "hidden", textDecoration: "none" }}>{m.kind === "voice" ? "🎤" : m.attachment.name}</a>;
+function MediaThumb({ t, m, a, onOpen }: { t: any; m: Msg; a: Attachment; onOpen: () => void }) {
+  const isMediaItem = a.mime?.startsWith("image/") || a.mime?.startsWith("video/");
+  const url = useFileUrl(isMediaItem ? thumbOf(a) : a);
+  return isMediaItem
+    ? <div onClick={onOpen} style={{ position: "relative", aspectRatio: "1", borderRadius: 6, overflow: "hidden", cursor: "pointer", background: t.LINE }}>
+        {url && <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+        {a.mime.startsWith("video/") && <span style={{ position: "absolute", left: 4, bottom: 2, color: "#fff", fontSize: 10, textShadow: "0 1px 2px #000" }}>▶</span>}</div>
+    : <a href={url || undefined} target="_blank" rel="noreferrer" style={{ aspectRatio: "1", borderRadius: 6, background: t.dark ? "#16434A" : "#E3EFEE", color: t.TEAL, fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: 4, textAlign: "center", overflow: "hidden", textDecoration: "none" }}>{m.kind === "voice" ? "🎤" : a.name}</a>;
 }
 
 function PickDialog({ t, title, people, onClose, onPick, onCreate, single, group }: any) {

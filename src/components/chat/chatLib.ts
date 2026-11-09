@@ -3,7 +3,9 @@ import { supabase } from "@/lib/supabase";
 
 export type Profile = { id: string; full_name: string | null; role?: string | null };
 export type Room = { id: string; name: string; kind: "group" | "dm"; members: string[] | null; description?: string | null; created_by?: string | null; created_at?: string };
-export type Attachment = { path?: string; url?: string; name: string; size: number; mime: string; duration?: number };
+export type Attachment = { path?: string; url?: string; name: string; size: number; mime: string; duration?: number; width?: number; height?: number; thumbPath?: string; items?: Attachment[] };
+export const isMedia = (a?: { mime?: string } | null) => !!a?.mime && (a.mime.startsWith("image/") || a.mime.startsWith("video/"));
+export const mediaItems = (a?: Attachment | null): Attachment[] => !a ? [] : a.items?.length ? a.items : isMedia(a) ? [a] : [];
 export type Msg = {
   id: string; sender: string | null; sender_id: string | null; text: string | null; channel: string; kind: string;
   attachment: Attachment | null; reply_to: string | null; edited_at: string | null; deleted_at: string | null;
@@ -46,7 +48,13 @@ export const preview = (m?: Msg, myId?: string) => {
   if (!m) return "";
   if (m.deleted_at) return "This message was deleted";
   if (m.kind === "voice") return "🎤 Voice message";
-  if (m.attachment) return `${m.attachment.mime?.startsWith("image/") ? "📷" : "📎"} ${m.text || m.attachment.name}`;
+  if (m.attachment) {
+    const items = mediaItems(m.attachment);
+    if (items.length) { const vids = items.filter(i => i.mime.startsWith("video/")).length; const imgs = items.length - vids;
+      const label = items.length > 1 ? [imgs && `${imgs} photo${imgs > 1 ? "s" : ""}`, vids && `${vids} video${vids > 1 ? "s" : ""}`].filter(Boolean).join(", ") : vids ? "Video" : "Photo";
+      return `${vids && !imgs ? "🎥" : "📷"} ${m.text || label}`; }
+    return `📎 ${m.text || m.attachment.name}`;
+  }
   return m.text || "";
 };
 
@@ -66,3 +74,50 @@ export async function uploadFile(room: string, file: File | Blob, name: string, 
   if (error) throw error;
   return { path, name, size: (file as any).size || 0, mime };
 }
+
+export const fmtDuration = (sec?: number) => { if (!sec && sec !== 0) return ""; const s = Math.round(sec); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+
+/** Gets a photo or video ready to send: smaller photos, a still frame for videos, sizes for the layout. */
+export async function prepareMedia(file: File): Promise<{ blob: Blob; name: string; mime: string; width?: number; height?: number; duration?: number; thumb?: Blob }> {
+  if (file.type.startsWith("image/") && !/gif|svg/.test(file.type)) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const max = 1920; let w = img.naturalWidth, h = img.naturalHeight;
+      if (Math.max(w, h) <= max && file.size < 1.5e6) return { blob: file, name: file.name, mime: file.type, width: w, height: h };
+      const k = Math.min(1, max / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
+      const c = document.createElement("canvas"); c.width = w; c.height = h; c.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise<Blob>(res => c.toBlob(b => res(b || file), "image/jpeg", 0.85));
+      return { blob, name: file.name.replace(/\.[^.]+$/, "") + ".jpg", mime: "image/jpeg", width: w, height: h };
+    } catch { return { blob: file, name: file.name, mime: file.type }; } finally { URL.revokeObjectURL(url); }
+  }
+  if (file.type.startsWith("video/")) {
+    const url = URL.createObjectURL(file);
+    try {
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "metadata"; v.src = url;
+      await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = rej; setTimeout(res, 6000); });
+      const duration = isFinite(v.duration) ? v.duration : undefined; const width = v.videoWidth || undefined, height = v.videoHeight || undefined;
+      let thumb: Blob | undefined;
+      try {
+        v.currentTime = Math.min(0.5, (duration || 1) / 2);
+        await new Promise((res, rej) => { v.onseeked = res; v.onerror = rej; setTimeout(res, 4000); });
+        const k = Math.min(1, 640 / Math.max(width || 640, height || 640));
+        const c = document.createElement("canvas"); c.width = Math.round((width || 640) * k); c.height = Math.round((height || 360) * k);
+        c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
+        thumb = await new Promise<Blob | undefined>(res => c.toBlob(b => res(b || undefined), "image/jpeg", 0.8));
+      } catch { /* no still frame */ }
+      return { blob: file, name: file.name, mime: file.type, width, height, duration, thumb };
+    } catch { return { blob: file, name: file.name, mime: file.type }; } finally { URL.revokeObjectURL(url); }
+  }
+  return { blob: file, name: file.name, mime: file.type || "application/octet-stream" };
+}
+
+/** Uploads one prepared photo/video (and its still frame) and returns the attachment. */
+export async function uploadMedia(room: string, file: File): Promise<Attachment> {
+  const p = await prepareMedia(file);
+  const a = await uploadFile(room, p.blob, p.name, p.mime);
+  a.width = p.width; a.height = p.height; a.duration = p.duration;
+  if (p.thumb) { try { a.thumbPath = (await uploadFile(room, p.thumb, p.name.replace(/\.[^.]+$/, "") + "-thumb.jpg", "image/jpeg")).path; } catch { /* plays without a still */ } }
+  return a;
+}
+export const thumbOf = (a: Attachment): Attachment | null => a.mime.startsWith("video/") ? (a.thumbPath ? { path: a.thumbPath, name: "thumb.jpg", size: 0, mime: "image/jpeg" } : null) : a;
