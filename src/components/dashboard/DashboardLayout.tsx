@@ -5,6 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useDarkMode } from "../../hooks/useDarkMode";
 import { useNavigate } from "react-router-dom";
 import { GlobalSearch } from "./GlobalSearch";
+import { NotificationsBell } from "./Notifications";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -19,12 +20,7 @@ interface Notification {
   read: boolean;
 }
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: 1, type: "info",    title: "New lead assigned",        message: "A new lead from Rajesh Mehta has been assigned to you.",      time: "2 min ago",  read: false },
-  { id: 2, type: "success", title: "Itinerary approved",       message: "Kerala Backwaters package itinerary was approved by the client.", time: "1 hr ago", read: false },
-  { id: 3, type: "warning", title: "Supplier response pending", message: "No response from TravelEase Suppliers for 48 hours.",          time: "3 hr ago",  read: false },
-  { id: 4, type: "info",    title: "Campaign scheduled",        message: "Diwali campaign has been queued and will go live at 9:00 AM.", time: "Yesterday", read: true  },
-];
+const INITIAL_NOTIFICATIONS: Notification[] = [];
 
 function getInitials(name?: string | null, email?: string | null): string {
   if (name?.trim()) {
@@ -124,98 +120,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
 
           {/* Notifications */}
-          <div ref={notifRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setNotifOpen(o => !o)}
-              title="Notifications"
-              style={{
-                ...btnStyle,
-                ...(notifOpen ? {
-                  boxShadow: dark
-                    ? "inset 2px 2px 5px #061A1E, inset -2px -2px 5px #16434A"
-                    : "inset 2px 2px 5px #D9C6C8, inset -2px -2px 5px #FFFFFF"
-                } : {}),
-              }}
-            >
-              <Bell style={{ width: 15, height: 15 }} />
-              {unreadCount > 0 && (
-                <span style={{
-                  position: "absolute", top: 7, right: 7,
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: "#E05B5B", border: `2px solid ${BG}`,
-                }} />
-              )}
-            </button>
-
-            {/* Notification panel */}
-            {notifOpen && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 10px)", right: 0, width: 340,
-                background: PANEL_BG, borderRadius: 18, boxShadow: PANEL_SHADOW,
-                zIndex: 50, overflow: "hidden", border: `1px solid ${BORDER}`,
-              }}>
-                <div style={{
-                  padding: "14px 16px 10px", display: "flex", alignItems: "center",
-                  justifyContent: "space-between", borderBottom: `1px solid ${BORDER}`,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: TEXT_MAIN }}>Notifications</span>
-                    {unreadCount > 0 && (
-                      <span style={{
-                        background: "#13585B",
-                        color: "#fff", borderRadius: 99, fontSize: 10, fontWeight: 600, padding: "1px 7px",
-                      }}>{unreadCount}</span>
-                    )}
-                  </div>
-                  {unreadCount > 0 && (
-                    <button onClick={markAllRead} style={{
-                      fontSize: 11, color: "#1F6F72", fontWeight: 600,
-                      background: "none", border: "none", cursor: "pointer", padding: 0,
-                    }}>Mark all read</button>
-                  )}
-                </div>
-
-                <div style={{ maxHeight: 360, overflowY: "auto", padding: "8px 0" }}>
-                  {notifications.length === 0 ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", color: TEXT_MUTED, fontSize: 13 }}>
-                      You're all caught up
-                    </div>
-                  ) : notifications.map(n => {
-                    const ts = typeStyles[n.type];
-                    return (
-                      <div key={n.id} onClick={() => markRead(n.id)} style={{
-                        display: "flex", alignItems: "flex-start", gap: 10,
-                        padding: "10px 14px", cursor: "pointer",
-                        background: n.read ? "transparent" : "rgba(20,100,110,0.06)",
-                      }}>
-                        <div style={{
-                          width: 28, height: 28, borderRadius: 8, background: ts.bg,
-                          color: ts.color, display: "flex", alignItems: "center",
-                          justifyContent: "center", flexShrink: 0, marginTop: 1,
-                        }}>{ts.icon}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                            <span style={{ fontWeight: n.read ? 500 : 700, fontSize: 12.5, color: TEXT_MAIN }}>
-                              {n.title}
-                            </span>
-                            {!n.read && (
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#1F6F72", flexShrink: 0 }} />
-                            )}
-                          </div>
-                          <p style={{ margin: 0, fontSize: 11.5, color: TEXT_MUTED, lineHeight: 1.4 }}>{n.message}</p>
-                          <span style={{ fontSize: 10.5, color: TEXT_MUTED, marginTop: 3, display: "block" }}>{n.time}</span>
-                        </div>
-                        <button onClick={e => { e.stopPropagation(); dismiss(n.id); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: TEXT_MUTED, padding: 2, flexShrink: 0 }}>
-                          <X style={{ width: 11, height: 11 }} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          <NotificationsBell btnStyle={btnStyle} />
 
           {/* Avatar → /profile */}
           <div
