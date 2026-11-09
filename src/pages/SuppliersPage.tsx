@@ -43,7 +43,7 @@ export default function SuppliersPage() {
 
   const load = async () => {
     setErr("");
-    try { setData(await api("/gmail/suppliers-overview")); }
+    try { const d = await api("/gmail/suppliers-overview"); setData({ suppliers: d.suppliers || [], hotels: d.hotels || [], activities: d.activities || [], transfers: d.transfers || [], emails: d.emails || [] }); }
     catch (e: any) { setErr(e?.message?.includes("Failed to fetch") ? "The server is waking up. This takes up to a minute on the free plan." : e?.message || "Could not load suppliers"); setTimeout(load, 15000); }
   };
   const loadGmail = async () => { try { setGmail(await api("/gmail/status")); } catch { setGmail({ connected: false }); } };
