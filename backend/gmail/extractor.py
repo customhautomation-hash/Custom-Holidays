@@ -29,8 +29,12 @@ Classify this email into ONE of these categories:
 - GENERAL_SUPPLIER: general supplier communication
 - IRRELEVANT: not related to travel supplier operations
 
+Also say what kind of supplier the sender is (supplier_type), one of:
+DMC (destination management company / ground handler / local tour operator), Hotel, Transport, Activity Provider, Airline / GSA, Cruise, Travel Agency, Visa / Insurance, Other.
+supplier_name is the sender's COMPANY name (not the person), as it appears in the signature or domain.
+
 Respond with ONLY a JSON object:
-{"category": "HOTEL_RATE", "supplier_name": "XYZ Travels", "destination": "Dubai", "confidence": 0.9}
+{"category": "HOTEL_RATE", "supplier_name": "XYZ Travels", "supplier_type": "DMC", "destination": "Dubai", "confidence": 0.9}
 
 No other text. Raw JSON only."""
 

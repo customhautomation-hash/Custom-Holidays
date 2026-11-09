@@ -1,3 +1,4 @@
+import { API_ROOT } from "@/lib/api";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -67,7 +68,7 @@ const EMPTY_FORM: SupplierForm = {
 };
 
 /* ── Backend API helpers ─────────────────────────────────────────── */
-const BACKEND_API = "http://127.0.0.1:8000/api";
+const BACKEND_API = API_ROOT; // was the laptop-only address
 
 async function apiRequest<T>(
   path: string,

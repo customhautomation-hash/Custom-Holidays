@@ -258,3 +258,22 @@ def clear_all_processed(authorization: Optional[str] = Header(None)):
         return {"success": True, "message": "Cleared — next sync re-processes everything"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/suppliers-overview")
+def suppliers_overview(authorization: Optional[str] = Header(None)):
+    """Everything the Suppliers page needs in one call: suppliers, their rates and their emails."""
+    _get_user_id(authorization)
+    def rows(table, cols="*", order="created_at", limit=3000):
+        try:
+            return supabase.table(table).select(cols).order(order, desc=True).limit(limit).execute().data or []
+        except Exception as e:
+            logger.warning("suppliers-overview: %s %s", table, e)
+            return []
+    return {
+        "suppliers":  rows("suppliers"),
+        "hotels":     rows("supplier_hotels"),
+        "activities": rows("supplier_activities"),
+        "transfers":  rows("supplier_transfers"),
+        "emails":     rows("gmail_processed_emails", "supplier_name, status, extraction_type, created_at", limit=5000),
+    }

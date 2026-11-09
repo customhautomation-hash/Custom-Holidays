@@ -110,32 +110,42 @@ class IngestionResult:
         }
 
 
-def _upsert_supplier(supplier_name: str, sender_email: str) -> Optional[str]:
-    """
-    Ensure this supplier exists in the `suppliers` table.
-    Returns the supplier id. Creates a new record if not found.
-    This keeps Supplier Reachout / Active Deals in sync.
-    """
-    if not supplier_name or supplier_name == "Unknown Supplier":
-        return None
-    try:
-        # Check by name
-        existing = (
-            supabase.table("suppliers")
-            .select("id")
-            .ilike("name", supplier_name)
-            .limit(1)
-            .execute()
-        )
-        if existing.data:
-            return existing.data[0]["id"]
+CATEGORY_TYPE = {"HOTEL_RATE": "Hotel", "ACTIVITY_RATE": "Activity Provider", "TRANSFER_RATE": "Transport"}
 
-        # Create new supplier record
+
+def _sender_email(sender: str) -> str:
+    import re
+    m = re.search(r"[\w.+-]+@[\w-]+\.[\w.-]+", sender or "")
+    return m.group(0).lower() if m else ""
+
+
+def _upsert_supplier(supplier_name: str, sender: str, category: str = "", classification: Optional[dict] = None) -> Optional[str]:
+    """
+    Make sure this supplier is in the `suppliers` table (Suppliers page).
+    New suppliers get their type (DMC, Hotel, ...), destination and email from the email.
+    Existing ones only get empty fields filled in, never overwritten.
+    """
+    if not supplier_name or supplier_name.lower() in ("unknown supplier", "unknown", ""):
+        return None
+    classification = classification or {}
+    email = _sender_email(sender)
+    stype = (classification.get("supplier_type") or CATEGORY_TYPE.get(category) or "DMC").strip()
+    place = (classification.get("destination") or "").strip() or None
+    try:
+        existing = supabase.table("suppliers").select("id, email, place, supplier_type").ilike("name", supplier_name).limit(1).execute()
+        if not existing.data and email:
+            existing = supabase.table("suppliers").select("id, email, place, supplier_type").eq("email", email).limit(1).execute()
+        if existing.data:
+            row = existing.data[0]
+            fill = {}
+            if not row.get("email") and email: fill["email"] = email
+            if not row.get("place") and place: fill["place"] = place
+            if (not row.get("supplier_type") or row.get("supplier_type") == "Tour Operator") and stype: fill["supplier_type"] = stype
+            if fill: supabase.table("suppliers").update(fill).eq("id", row["id"]).execute()
+            return row["id"]
         result = supabase.table("suppliers").insert({
-            "name":          supplier_name,
-            "email":         sender_email,
-            "supplier_type": "Tour Operator",   # default; can be updated manually
-            "onboarding_status": "new",
+            "name": supplier_name, "email": email or None, "supplier_type": stype, "place": place,
+            "onboarding_status": "new", "internal_notes": "Added from Gmail",
         }).execute()
         if result.data:
             return result.data[0]["id"]
@@ -263,10 +273,16 @@ def run_ingestion(
         already_processed = get_already_processed_ids(user_id)
         _log(f"Already processed: {len(already_processed)} emails")
 
-        messages_data = list_messages(access_token, query=SUPPLIER_QUERY, max_results=max_emails)
-        messages = messages_data.get("messages", [])
+        messages, page_token, pages = [], None, 0
+        while len([m for m in messages if m["id"] not in already_processed]) < max_emails and pages < 30:
+            page = list_messages(access_token, query=SUPPLIER_QUERY, max_results=100, page_token=page_token)
+            messages += page.get("messages", [])
+            page_token = page.get("nextPageToken"); pages += 1
+            if not page_token:
+                break
+        messages = [m for m in messages if m["id"] not in already_processed][:max_emails]
         result.fetched = len(messages)
-        _log(f"Found {len(messages)} messages to check")
+        _log(f"Found {len(messages)} new messages to check")
 
         for msg_ref in messages:
             msg_id = msg_ref["id"]
@@ -300,7 +316,7 @@ def run_ingestion(
                     continue
 
                 # Upsert into suppliers table — links to SupplierReachout / ActiveDeals
-                supplier_id = _upsert_supplier(supplier_name, meta["from"])
+                supplier_id = _upsert_supplier(supplier_name, meta["from"], category, classification)
                 if supplier_id:
                     result.suppliers_created += 1
 

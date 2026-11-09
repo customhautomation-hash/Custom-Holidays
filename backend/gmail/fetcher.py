@@ -15,7 +15,7 @@ PROCESSED_TABLE = "gmail_processed_emails"
 
 # Fetch ALL emails — the AI classifier handles relevance filtering.
 # Previously this was too narrow and missed most supplier emails.
-SUPPLIER_QUERY = ""   # empty = fetch all mail, no pre-filter
+SUPPLIER_QUERY = "-category:promotions -category:social -in:chats -in:spam"   # skip newsletters and social mail
 
 
 def _gmail_get(path: str, access_token: str, params: dict = None) -> dict:

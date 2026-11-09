@@ -12,7 +12,8 @@ import Login            from "./pages/Login";
 import Index            from "./pages/index";
 import MasterCRM        from "./pages/MasterCRM";
 import LeadTools        from "./pages/Leads";
-import Suppliers        from "./pages/suppliers";
+import Suppliers        from "./pages/SuppliersPage";
+import SupplierTools    from "./pages/suppliers";
 import Itineraries      from "./pages/ItinerariesLibrary";
 import Content          from "./pages/Content";
 import Chat             from "./pages/TeamChat";
@@ -79,6 +80,7 @@ function AppRoutes() {
           <Route path="/automations"       element={<Automations />} />
           <Route path="/trips"             element={<ActiveTrips />} />
           <Route path="/suppliers"         element={<Suppliers />} />
+          <Route path="/suppliers/import"  element={<SupplierTools />} />
           <Route path="/active-deals"      element={<ActiveDeals />} />
           <Route path="/campaign-design"   element={<CampaignDesign />} />
           <Route path="/content"           element={<Content />} />
