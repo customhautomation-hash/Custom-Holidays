@@ -8,7 +8,7 @@ import requests
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
