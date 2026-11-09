@@ -13,6 +13,7 @@ import {
   hasConnectedDrive, driveAccountEmail, disconnectDrive, parseDriveFolderId, DEFAULT_DRIVE_PARENT,
 } from "@/lib/tripFolders";
 import { Page, Card, Btn, Field, Muted, Dot, useT } from "@/components/ch/kit";
+import { pushState, enablePush, disablePush, testPush, PushState } from "@/lib/push";
 
 async function authHeader(): Promise<string> {
   const { data } = await supabase.auth.getSession();
@@ -36,6 +37,10 @@ export default function ProfilePage() {
   const [driveEmail, setDriveEmail] = useState(driveAccountEmail());
   const [pcFolder, setPcFolder] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const [push, setPush] = useState<PushState | "busy">("off");
+  const [pushMsg, setPushMsg] = useState("");
+  useEffect(() => { pushState().then(setPush).catch(() => {}); }, []);
+  const pushAction = async (fn: () => Promise<any>, ok?: string) => { setPushMsg(""); const before = push; setPush("busy"); try { const r = await fn(); setPush(typeof r === "string" ? r as PushState : before); if (ok) setPushMsg(ok); } catch (e: any) { setPush(before); setPushMsg(e?.message || "Something went wrong"); } };
 
   useEffect(() => { setName(profile?.full_name ?? ""); }, [profile?.full_name]);
   useEffect(() => {
@@ -142,6 +147,20 @@ export default function ProfilePage() {
                 <button onClick={resetPassword} style={{ background: "none", border: "none", color: t.TEAL, fontWeight: 600, cursor: "pointer", padding: 0 }}>Send reset link</button></div>
               {pw && <Muted>{pw}</Muted>}
             </div>
+          </Card>
+          <Card>
+            <b style={{ fontSize: 15 }}>Desktop notifications</b>
+            <div><Muted>New messages, @mentions, new leads and trip reminders pop up on this computer, even when the dashboard is closed.</Muted></div>
+            <div style={{ fontSize: 12.5, margin: "12px 0", color: push === "on" ? t.TEAL : t.MUTED }}>
+              {push === "on" ? <><Dot color={t.TEAL} />On for this browser</> : push === "blocked" ? "Blocked. Click the lock icon in the address bar, set Notifications to Allow, then reload." : push === "unsupported" ? "This browser can't show desktop notifications. Use Chrome or Edge." : push === "busy" ? "Working…" : "Off for this browser"}
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {push === "on" ? <>
+                <Btn onClick={() => pushAction(testPush, "Test sent. It should pop up in a few seconds.")}>Send a test</Btn>
+                <Btn onClick={() => pushAction(disablePush)}>Turn off</Btn>
+              </> : push === "off" && <Btn kind="primary" onClick={() => pushAction(enablePush, "On. Sending a test…").then(() => testPush().catch(() => {}))}>Turn on</Btn>}
+            </div>
+            {pushMsg && <Muted style={{ display: "block", marginTop: 8 }}>{pushMsg}</Muted>}
           </Card>
           <Card>
             <b style={{ fontSize: 15 }}>Appearance</b>

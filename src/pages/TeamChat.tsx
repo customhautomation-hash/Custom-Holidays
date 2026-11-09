@@ -7,6 +7,7 @@
  * (run supabase/team_chat.sql once).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Image as ImageIcon, Search, Plus, Users, Paperclip, Smile, Send, Mic, Square, X, Star, Pin, Info, Pencil, Reply, Loader2, ArrowLeft, Trash2, UserPlus, LogOut } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { supabase } from "@/lib/supabase";
@@ -32,7 +33,9 @@ export default function TeamChat() {
   const [recent, setRecent] = useState<Msg[]>([]);          // latest messages across chats (previews + unread)
   const [msgs, setMsgs] = useState<Msg[]>([]);              // the open chat
   const [reads, setReads] = useState<Read[]>([]);
-  const [active, setActive] = useState<string>(() => { try { return localStorage.getItem("chat:active") || "General"; } catch { return "General"; } });
+  const [params, setParams] = useSearchParams();
+  const [active, setActive] = useState<string>(() => { try { return params.get("room") || localStorage.getItem("chat:active") || "General"; } catch { return "General"; } });
+  useEffect(() => { const r = params.get("room"); if (r) { setActive(r); setParams({}, { replace: true }); } }, [params]);
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState<Set<string>>(new Set());

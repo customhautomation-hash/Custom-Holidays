@@ -30,11 +30,14 @@ import QuoteGenerator   from "./pages/QuoteGenerator";
 import VoucherGenerator from "./pages/VoucherGenerator";
 import PriceCompare     from "./pages/PriceCompare";
 import { AssistantPopup } from "@/components/dashboard/AssistantPopup";
+import { refreshPush } from "@/lib/push";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { session, loading } = useAuth();
+  useEffect(() => { if (session) refreshPush(); }, [!!session]);
 
   if (loading) {
     return (

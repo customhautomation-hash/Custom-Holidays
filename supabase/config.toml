@@ -9,3 +9,8 @@ entrypoint = "./functions/ga4-analytics/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/ga4-analytics/*.html" ]
+
+[functions.push-notify]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/push-notify/index.ts"

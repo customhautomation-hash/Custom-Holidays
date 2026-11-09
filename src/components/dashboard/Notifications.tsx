@@ -12,6 +12,7 @@ import { Bell, MessageSquare, AtSign, UserPlus, Plane, Home, X, CheckCheck } fro
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/components/ch/kit";
+import { pushState, enablePush, PushState } from "@/lib/push";
 
 type Note = { id: string; kind: "chat" | "mention" | "lead" | "trip" | "back"; title: string; body: string; at: string; go: () => void };
 const LS = { get: (k: string, d: any) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } }, set: (k: string, v: any) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } } };
@@ -36,6 +37,9 @@ export function NotificationsBell({ btnStyle }: { btnStyle: React.CSSProperties 
   const [seen, setSeen] = useState<string[]>(() => LS.get("notif:read", []));
   const [hidden, setHidden] = useState<string[]>(() => LS.get("notif:hidden", []));
   const ref = useRef<HTMLDivElement>(null);
+  const [push, setPush] = useState<PushState | "busy">("unsupported");
+  const [pushErr, setPushErr] = useState("");
+  useEffect(() => { pushState().then(setPush).catch(() => {}); }, [open]);
 
   const load = async () => {
     if (!me) return;
@@ -72,7 +76,7 @@ export function NotificationsBell({ btnStyle }: { btnStyle: React.CSSProperties 
     const nameOf = (id: string, fb: string) => people.find(p => p.id === id)?.full_name || fb || "Someone";
     const roomName = (id: string) => { const r = rooms.find(x => x.id === id); if (!r) return id === "General" ? "General" : "a chat"; return r.kind === "dm" ? "you" : r.name; };
     const mine = (r: any) => !r || !r.members?.length || r.members.includes(me);
-    const openChat = (room: string) => () => { try { localStorage.setItem("chat:active", room); } catch { /* ignore */ } nav("/chat"); };
+    const openChat = (room: string) => () => nav(`/chat?room=${encodeURIComponent(room)}`);
     // chat: one note per chat with unread messages; mentions get their own note
     const byRoom = new Map<string, any[]>();
     for (const m of chat) {
@@ -152,6 +156,12 @@ export function NotificationsBell({ btnStyle }: { btnStyle: React.CSSProperties 
               {older.map(row)}
             </>}
           </div>
+          {(push === "off" || push === "blocked" || push === "busy") && (
+            <div style={{ borderTop: `1px solid ${t.LINE}`, padding: "10px 16px", fontSize: 12, color: t.MUTED, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ flex: 1 }}>{push === "blocked" ? "Notifications are blocked for this site. Allow them from the lock icon in the address bar." : pushErr || "Get these on your desktop, even when the dashboard is closed"}</span>
+              {push !== "blocked" && <button disabled={push === "busy"} onClick={async () => { setPush("busy"); setPushErr(""); try { setPush(await enablePush()); } catch (e: any) { setPushErr(e?.message || "Could not turn on"); setPush("off"); } }}
+                style={{ fontSize: 12, fontWeight: 600, color: "#fff", background: t.dark ? "#1F6F72" : "#13585B", border: "none", borderRadius: 9, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>{push === "busy" ? "Turning on…" : "Turn on"}</button>}
+            </div>)}
         </div>)}
     </div>
   );
