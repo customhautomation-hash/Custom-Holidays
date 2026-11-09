@@ -3,9 +3,9 @@
  * The backend reads supplier emails (rates, contracts, confirmations), adds the company here with its
  * type and destination, and files any rates it finds. Rates and emails show per supplier.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, RefreshCw, Plus, Loader2, Upload, Building2, Car, Map as MapIcon, Trash2, ExternalLink } from "lucide-react";
+import { Mail, RefreshCw, Plus, Loader2, Upload, Building2, Car, Map as MapIcon, Trash2, ExternalLink, ListChecks, ChevronLeft, ChevronRight, EyeOff } from "lucide-react";
 import { API_ROOT } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { Page, Card, Btn, Field, Muted, Dot, Empty, useT, fmtDate } from "@/components/ch/kit";
@@ -28,58 +28,114 @@ async function api(path: string, init: RequestInit = {}) {
   const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || `Request failed (${r.status})`); return d;
 }
 
+type SRow = { s: Supplier; type: string; rates: number; emails: number; last: string | null; fromGmail: boolean; hidden: boolean; review: boolean };
+type LogEmail = { gmail_message_id: string; subject?: string | null; sender?: string | null; note?: string | null; status?: string; supplier_name?: string; extraction_type?: string; created_at: string };
+const PER_PAGE = 50;
+const ago = (iso?: string | null) => {
+  if (!iso) return "";
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "just now"; if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  return fmtDate(iso, { day: "numeric", month: "short" });
+};
+
 export default function SuppliersPage() {
   const t = useT();
   const nav = useNavigate();
-  const [data, setData] = useState<{ suppliers: Supplier[]; hotels: Rate[]; activities: Rate[]; transfers: Rate[]; emails: Rate[] } | null>(null);
+  const [data, setData] = useState<{ suppliers: Supplier[]; hotels: Rate[]; activities: Rate[]; transfers: Rate[]; stats: Record<string, { count: number; last: string | null }> } | null>(null);
   const [err, setErr] = useState("");
   const [gmail, setGmail] = useState<any>(null);
-  const [sync, setSync] = useState<string>("");
+  const [running, setRunning] = useState(false);
+  const [live, setLive] = useState<string[]>([]);
+  const [recent, setRecent] = useState<LogEmail[] | null>(null);
+  const [showLog, setShowLog] = useState(false);
+  const [logFilter, setLogFilter] = useState<"all" | "saved" | "skipped">("all");
   const [q, setQ] = useState(""); const [type, setType] = useState("All");
+  const [sort, setSort] = useState<"recent" | "name" | "rates">("recent");
+  const [page, setPage] = useState(0);
   const [sel, setSel] = useState<string | null>(null);
   const [tab, setTab] = useState<"hotels" | "activities" | "transfers">("hotels");
   const [adding, setAdding] = useState(false);
   const poll = useRef<any>(null);
+  const tableTop = useRef<HTMLDivElement>(null);
 
   const load = async () => {
     setErr("");
-    try { const d = await api("/gmail/suppliers-overview"); setData({ suppliers: d.suppliers || [], hotels: d.hotels || [], activities: d.activities || [], transfers: d.transfers || [], emails: d.emails || [] }); }
-    catch { setErr("Couldn't load suppliers just now"); setTimeout(load, 15000); }
+    try {
+      const d = await api("/gmail/suppliers-overview");
+      let stats = d.email_stats || {};
+      if (!d.email_stats && Array.isArray(d.emails)) { // older server
+        stats = {}; d.emails.forEach((e: any) => { const k = norm(e.supplier_name); if (!k) return; const x = stats[k] || (stats[k] = { count: 0, last: null }); x.count++; if (!x.last || e.created_at > x.last) x.last = e.created_at; });
+      }
+      setData({ suppliers: d.suppliers || [], hotels: d.hotels || [], activities: d.activities || [], transfers: d.transfers || [], stats });
+    } catch { setErr("Couldn't load suppliers just now"); setTimeout(load, 15000); }
   };
-  const loadGmail = async () => { try { setGmail(await api("/gmail/status")); } catch { setGmail({ connected: false }); } };
+  const loadGmail = async () => { try { const g = await api("/gmail/status"); setGmail(g); return g; } catch { setGmail({ connected: false }); return null; } };
+  const loadRecent = async () => { try { setRecent((await api("/gmail/recent?limit=80")).emails || []); } catch { setRecent(r => r || []); } };
+
+  // While a check runs, show its log line by line
+  const watch = () => {
+    clearInterval(poll.current);
+    setRunning(true);
+    poll.current = setInterval(async () => {
+      const l = await api("/gmail/live-log").catch(() => null);
+      if (!l) return;
+      setLive(l.log || []);
+      if (!l.is_syncing) { clearInterval(poll.current); setRunning(false); load(); loadGmail(); loadRecent(); }
+    }, 2000);
+  };
+
   useEffect(() => {
-    load(); loadGmail();
-    api("/gmail/heartbeat", { method: "POST" }).catch(() => {}); // checks Gmail if it's been 10+ minutes
-    const i = setInterval(() => { api("/gmail/heartbeat", { method: "POST" }).catch(() => {}); load(); }, 10 * 60000);
+    load();
+    loadGmail().then(g => { if (g?.is_syncing) { setShowLog(true); watch(); } });
+    loadRecent();
+    api("/gmail/heartbeat", { method: "POST" }).catch(() => {}); // checks Gmail if it's been 5+ minutes
+    const i = setInterval(() => { api("/gmail/heartbeat", { method: "POST" }).catch(() => {}); load(); loadGmail(); loadRecent(); }, 5 * 60000);
     return () => { clearInterval(i); clearInterval(poll.current); };
   }, []);
 
   const checkNow = async () => {
-    setSync("Starting…");
-    try {
-      const { job_id } = await api("/gmail/sync-now?max_emails=150", { method: "POST" });
-      clearInterval(poll.current);
-      poll.current = setInterval(async () => {
-        const s = await api(`/gmail/sync/status/${job_id}`).catch(() => null);
-        if (!s) return;
-        setSync(s.status === "running" ? "Reading emails…" : s.progress || "");
-        if (s.status !== "running") { clearInterval(poll.current); load(); loadGmail(); setTimeout(() => setSync(""), 8000); }
-      }, 3000);
-    } catch (e: any) { setSync(e?.message || "Could not start"); }
+    setShowLog(true); setLive(["Starting the check"]);
+    try { await api("/gmail/sync-now?max_emails=150", { method: "POST" }); setTimeout(watch, 800); }
+    catch (e: any) { setLive([e?.message || "Couldn't start the check. Try again in a minute"]); }
   };
 
-  const rows = useMemo(() => {
+  const rows: SRow[] = useMemo(() => {
     if (!data) return [];
-    const count = (list: Rate[], s: Supplier) => list.filter(r => norm(r.supplier_name) === norm(s.name) || (s.company_name && norm(r.supplier_name) === norm(s.company_name))).length;
+    const rateCount = new Map<string, number>();
+    [...data.hotels, ...data.activities, ...data.transfers].forEach(r => { const k = norm(r.supplier_name); rateCount.set(k, (rateCount.get(k) || 0) + 1); });
     return data.suppliers.map(s => {
-      const mails = data.emails.filter(e => norm(e.supplier_name) === norm(s.name));
-      return { s, type: typeOf(s), rates: count(data.hotels, s) + count(data.activities, s) + count(data.transfers, s), emails: mails.length, last: mails[0]?.created_at || null,
-        fromGmail: !!mails.length || /gmail/i.test(s.internal_notes || "") };
-    }).sort((a, b) => (b.last || b.s.created_at || "").localeCompare(a.last || a.s.created_at || ""));
+      const st = data.stats[norm(s.name)] || (s.company_name ? data.stats[norm(s.company_name)] : undefined);
+      const rates = (rateCount.get(norm(s.name)) || 0) + (s.company_name && norm(s.company_name) !== norm(s.name) ? rateCount.get(norm(s.company_name)) || 0 : 0);
+      const type = typeOf(s);
+      const hidden = (s as any).onboarding_status === "not_supplier";
+      return { s, type, rates, emails: st?.count || 0, last: st?.last || null, fromGmail: !!st || /gmail/i.test(s.internal_notes || ""), hidden,
+        review: !hidden && type === "Other" && rates === 0 };
+    });
   }, [data]);
-  const counts = useMemo(() => { const m: Record<string, number> = { All: rows.length }; rows.forEach(r => { m[r.type] = (m[r.type] || 0) + 1; }); return m; }, [rows]);
-  const shown = rows.filter(r => (type === "All" || r.type === type) && (!q || [r.s.name, r.s.company_name, r.s.place, r.s.email].some(v => norm(v).includes(norm(q)))));
-  const cur = rows.find(r => r.s.id === sel) || shown[0] || null;
+
+  const counts = useMemo(() => {
+    const m: Record<string, number> = { All: 0, "Needs review": 0, Hidden: 0 };
+    rows.forEach(r => { if (r.hidden) { m.Hidden++; return; } m.All++; m[r.type] = (m[r.type] || 0) + 1; if (r.review) m["Needs review"]++; });
+    return m;
+  }, [rows]);
+
+  const shown = useMemo(() => {
+    const qq = norm(q);
+    const list = rows.filter(r =>
+      (type === "Hidden" ? r.hidden : !r.hidden) &&
+      (type === "All" || type === "Hidden" || (type === "Needs review" ? r.review : r.type === type)) &&
+      (!qq || [r.s.name, r.s.company_name, r.s.place, r.s.email, r.s.designation].some(v => norm(v).includes(qq))));
+    const key = (r: SRow) => r.last || r.s.created_at || "";
+    return list.sort(sort === "name" ? (a, b) => a.s.name.localeCompare(b.s.name) : sort === "rates" ? (a, b) => b.rates - a.rates || key(b).localeCompare(key(a)) : (a, b) => key(b).localeCompare(key(a)));
+  }, [rows, q, type, sort]);
+  useEffect(() => { setPage(0); }, [q, type, sort]);
+  const pages = Math.max(1, Math.ceil(shown.length / PER_PAGE));
+  const pg = Math.min(page, pages - 1);
+  const pageRows = shown.slice(pg * PER_PAGE, pg * PER_PAGE + PER_PAGE);
+  const goPage = (n: number) => { setPage(n); tableTop.current?.scrollTo({ top: 0 }); };
+
+  const cur = rows.find(r => r.s.id === sel) || pageRows[0] || null;
   const ratesOf = (k: "hotels" | "activities" | "transfers") => !cur || !data ? [] : data[k].filter(r => norm(r.supplier_name) === norm(cur.s.name) || (cur.s.company_name && norm(r.supplier_name) === norm(cur.s.company_name)));
 
   const save = async (s: Supplier, patch: Partial<Supplier>) => {
@@ -87,71 +143,145 @@ export default function SuppliersPage() {
     setData(d => d && { ...d, suppliers: d.suppliers.map(x => x.id === s.id ? n : x) });
     await api(`/suppliers/${s.id}`, { method: "PUT", body: JSON.stringify({ name: n.name, designation: n.designation || "", company: n.company_name || "", place: n.place || "", phone: n.phone || "", email: n.email || "", supplier_type: n.supplier_type || "", event: n.internal_notes || "", url: n.raw_notion_data?.url || "" }) }).catch(() => {});
   };
+  const setHidden = async (s: Supplier, hide: boolean) => {
+    setData(d => d && { ...d, suppliers: d.suppliers.map(x => x.id === s.id ? { ...x, onboarding_status: hide ? "not_supplier" : "active" } as any : x) });
+    await api(`/gmail/suppliers/${s.id}/review`, { method: "POST", body: JSON.stringify({ hide }) }).catch(() => {});
+  };
   const remove = async (s: Supplier) => {
-    if (!confirm(`Remove ${s.name} from Suppliers?`)) return;
+    if (!confirm(`Delete ${s.name} for good? To just tidy the list, use "Not a supplier" instead.`)) return;
     setData(d => d && { ...d, suppliers: d.suppliers.filter(x => x.id !== s.id) }); setSel(null);
     await api(`/suppliers/${s.id}`, { method: "DELETE" }).catch(() => {});
   };
 
-  const th = { textAlign: "left" as const, fontSize: 11.5, color: t.FAINT, fontWeight: 500, padding: "8px 10px", borderBottom: `1px solid ${t.LINE}` };
-  const td = { padding: "10px", fontSize: 13, borderTop: `1px solid ${t.LINE}` };
+  const th = { textAlign: "left" as const, fontSize: 11.5, color: t.FAINT, fontWeight: 500, padding: "10px", position: "sticky" as const, top: 0, background: t.BG, zIndex: 1, boxShadow: `inset 0 -1px 0 ${t.LINE}` };
+  const td = { padding: "9px 10px", fontSize: 13, borderTop: `1px solid ${t.LINE}` };
   const lastCheck = gmail?.latest?.last_run;
+  const chip = (k: string, label = k) => (
+    <button key={k} onClick={() => setType(k)} style={{ height: 30, padding: "0 13px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap",
+      background: type === k ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: type === k ? "#fff" : t.MUTED, boxShadow: type === k ? "none" : t.BTN }}>{label} · {counts[k] || 0}</button>);
+  const recentShown = (recent || []).filter(e => logFilter === "all" ? true : logFilter === "saved" ? e.status !== "irrelevant" : e.status === "irrelevant");
 
   return (
     <Page title="Suppliers" sub="DMCs, hotels and partners, added automatically from Gmail"
       actions={<>
-        <Field value={q} onChange={setQ} placeholder="Search name, place or email" style={{ width: 250 }} />
+        <Field value={q} onChange={setQ} placeholder="Search name, place, email or contact" style={{ width: 280 }} />
         <Btn onClick={() => nav("/suppliers/import")} title="CSV import, Notion import, business cards"><Upload size={15} />Import</Btn>
         <Btn kind="primary" onClick={() => setAdding(true)}><Plus size={15} />Add supplier</Btn>
       </>}>
+
+      {/* Gmail status + activity */}
       <Card pad="14px 20px">
         <div className="flex items-center gap-4 flex-wrap">
           <Mail size={18} color={gmail?.connected ? t.TEAL : t.FAINT} />
-          <div style={{ flex: 1, minWidth: 220, fontSize: 13 }}>
+          <div style={{ flex: 1, minWidth: 240, fontSize: 13 }}>
             {gmail === null ? <Muted>Checking Gmail…</Muted> : gmail.connected
               ? <><Dot color={t.TEAL} />Reading supplier emails from <b style={{ fontWeight: 600 }}>{gmail.gmail_email}</b>
-                  <Muted style={{ marginLeft: 8 }}>{gmail.is_syncing ? "· checking now" : lastCheck ? `· last checked ${fmtDate(lastCheck, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "· checks every 10 minutes while the dashboard is open"}</Muted></>
+                  <Muted style={{ marginLeft: 8 }}>{running || gmail.is_syncing ? "· checking now" : lastCheck ? `· last checked ${ago(lastCheck)} · checks on its own every 5 minutes` : "· checks on its own every 5 minutes"}</Muted></>
               : <>Gmail isn't connected, so new suppliers aren't being added. <button onClick={() => nav("/profile")} style={{ background: "none", border: "none", color: t.TEAL, fontWeight: 600, cursor: "pointer" }}>Connect it in Profile</button></>}
           </div>
-          {sync && <Muted>{sync}</Muted>}
-          {gmail?.connected && <Btn onClick={checkNow} disabled={!!sync && !/Done|error|Could/i.test(sync)}>{sync && !/Done|error|Could/i.test(sync) ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}Check Gmail now</Btn>}
+          {gmail?.connected && <Btn onClick={() => setShowLog(v => !v)}><ListChecks size={15} />{showLog ? "Hide activity" : "Activity"}</Btn>}
+          {gmail?.connected && <Btn onClick={checkNow} disabled={running}>{running ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}{running ? "Checking…" : "Check Gmail now"}</Btn>}
         </div>
+
+        {showLog && gmail?.connected && (
+          <div className="grid gap-5 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${t.LINE}` }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="flex items-center gap-2" style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
+                {running && <Loader2 size={13} className="animate-spin" color={t.TEAL} />}{running ? "Checking now" : "Last check"}
+              </div>
+              <div style={{ borderRadius: 12, boxShadow: t.IN, padding: "10px 12px", height: 260, overflowY: "auto", fontSize: 12, lineHeight: 1.7, fontVariantNumeric: "tabular-nums" }}
+                ref={el => { if (el && running) el.scrollTop = el.scrollHeight; }}>
+                {(live.length ? live : (gmail?.latest?.log || []).filter((l: string) => l && !/^\s*✓/.test(l))).map((l: string, i: number) => (
+                  <div key={i} style={{ color: /^Saved/.test(l) ? t.TEAL : /^Skipped/.test(l) ? t.FAINT : /^Done/.test(l) ? t.INK : t.MUTED, fontWeight: /^Done/.test(l) ? 600 : 400 }}>{l}</div>))}
+                {!live.length && !(gmail?.latest?.log || []).length && <Muted>Nothing yet. Click Check Gmail now to watch a check happen.</Muted>}
+              </div>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div className="flex items-center justify-between gap-3" style={{ marginBottom: 8 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>Recent emails</span>
+                <div className="flex gap-3">{([["all", "All"], ["saved", "Supplier emails"], ["skipped", "Skipped"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setLogFilter(k)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 12, color: logFilter === k ? t.TEAL : t.MUTED, fontWeight: logFilter === k ? 600 : 400 }}>{l}</button>))}</div>
+              </div>
+              <div style={{ height: 260, overflowY: "auto" }}>
+                {recent === null ? <Muted>Loading…</Muted> : !recentShown.length ? <Muted>No emails here yet.</Muted> : recentShown.map((e, i) => {
+                  const saved = e.status === "processed", skipped = e.status === "irrelevant";
+                  return (
+                    <div key={e.gmail_message_id + i} style={{ display: "grid", gridTemplateColumns: "10px minmax(0,1fr) auto", gap: 10, alignItems: "baseline", padding: "7px 0", borderTop: i ? `1px solid ${t.LINE}` : "none" }}>
+                      <span style={{ width: 7, height: 7, borderRadius: 99, background: saved ? t.TEAL : skipped ? (t.dark ? "#3E5F5C" : "#C9BDBF") : t.GOLD, display: "inline-block" }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: skipped ? t.MUTED : t.INK }}>{e.subject || e.supplier_name || "Email"}</div>
+                        <div style={{ fontSize: 11.5, color: t.FAINT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {[e.sender ? e.sender.split("<")[0].replace(/"/g, "").trim() : "", e.note || (skipped ? "Not a supplier email" : e.supplier_name)].filter(Boolean).join(" · ")}</div>
+                      </div>
+                      <span style={{ fontSize: 11.5, color: t.FAINT, whiteSpace: "nowrap" }}>{ago(e.created_at)}</span>
+                    </div>);
+                })}
+              </div>
+            </div>
+          </div>)}
       </Card>
 
       {err && !data && <Card><Empty title={err}><span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Trying again on its own. Nothing to do on your side</span></Empty></Card>}
+      {!data && !err && <Card><Empty title="Loading suppliers"><Loader2 size={16} className="animate-spin inline" /></Empty></Card>}
       {data && <>
-        <div className="flex gap-2 flex-wrap">
-          {["All", ...TYPES].filter(k => k === "All" || counts[k]).map(k => (
-            <button key={k} onClick={() => setType(k)} style={{ height: 32, padding: "0 14px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600,
-              background: type === k ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: type === k ? "#fff" : t.MUTED, boxShadow: type === k ? "none" : t.BTN }}>{k === "All" ? "All suppliers" : k} · {counts[k] || 0}</button>))}
+        <div className="flex gap-2 flex-wrap items-center">
+          {chip("All", "All suppliers")}
+          {TYPES.filter(k => counts[k]).map(k => chip(k))}
+          {counts["Needs review"] > 0 && <span style={{ width: 1, height: 20, background: t.LINE, margin: "0 4px" }} />}
+          {counts["Needs review"] > 0 && chip("Needs review")}
+          {counts.Hidden > 0 && chip("Hidden", "Not suppliers")}
         </div>
+        {type === "Needs review" && <Muted style={{ marginTop: -10 }}>Contacts with no clear type and no rates. Open each one and choose a type, or mark it as not a supplier to hide it. Nothing is deleted.</Muted>}
+
         <div className="flex flex-col xl:flex-row items-start gap-6">
-          <Card style={{ flex: 1, width: "100%" }} pad="10px 18px 8px">
-            {!shown.length ? <Empty title={rows.length ? "No supplier matches that" : "No suppliers yet"}>{rows.length ? "" : gmail?.connected ? "Click Check Gmail now and they'll be added from your supplier emails." : "Connect Gmail in Profile, or add one by hand."}</Empty> : (
-              <div style={{ overflowX: "auto" }}>
+          <Card style={{ flex: 1, width: "100%", minWidth: 0 }} pad="6px 14px 0">
+            {!shown.length ? <Empty title={rows.length ? "No supplier matches that" : "No suppliers yet"}>{rows.length ? "Try another name, or clear the search" : gmail?.connected ? "Click Check Gmail now and they'll be added from your supplier emails." : "Connect Gmail in Profile, or add one by hand."}</Empty> : <>
+              <div ref={tableTop} style={{ maxHeight: "calc(100vh - 330px)", minHeight: 320, overflow: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead><tr><th style={th}>Supplier</th><th style={th}>Type</th><th style={th}>Destination</th><th style={{ ...th, textAlign: "right" }}>Rates</th><th style={{ ...th, textAlign: "right" }}>Emails</th><th style={th}>Last email</th></tr></thead>
-                  <tbody>{shown.map(r => (
+                  <tbody>{pageRows.map(r => (
                     <tr key={r.s.id} onClick={() => setSel(r.s.id)} style={{ cursor: "pointer", background: cur?.s.id === r.s.id ? t.ROW : "transparent" }}>
-                      <td style={td}><div style={{ fontWeight: 500 }}>{r.s.name}</div><Muted>{r.s.email || r.s.company_name || ""}</Muted></td>
-                      <td style={{ ...td, color: t.MUTED }}>{r.type}</td>
-                      <td style={{ ...td, color: t.MUTED }}>{r.s.place || "—"}</td>
-                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.rates || "—"}</td>
+                      <td style={{ ...td, maxWidth: 320 }}><div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
+                        <div style={{ fontSize: 12, color: t.MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.email || r.s.company_name || ""}</div></td>
+                      <td style={{ ...td, color: t.MUTED, whiteSpace: "nowrap" }}>{r.type}</td>
+                      <td style={{ ...td, color: t.MUTED, maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.place || "—"}</td>
+                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", color: r.rates ? t.TEAL : t.FAINT, fontWeight: r.rates ? 600 : 400 }}>{r.rates || "—"}</td>
                       <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.emails || "—"}</td>
-                      <td style={{ ...td, color: t.MUTED, whiteSpace: "nowrap" }}>{r.last ? fmtDate(r.last, { day: "numeric", month: "short", year: "2-digit" }) : r.fromGmail ? "Gmail" : "Added by hand"}</td>
+                      <td style={{ ...td, color: t.MUTED, whiteSpace: "nowrap" }}>{r.last ? fmtDate(r.last, { day: "numeric", month: "short", year: "2-digit" }) : r.fromGmail ? "From Gmail" : "Added by hand"}</td>
                     </tr>))}</tbody>
                 </table>
-                <div style={{ padding: "10px", fontSize: 12, color: t.MUTED }}>{shown.length} of {rows.length} suppliers</div>
-              </div>)}
+              </div>
+              <div className="flex items-center justify-between gap-3 flex-wrap" style={{ padding: "10px 6px", borderTop: `1px solid ${t.LINE}`, fontSize: 12.5, color: t.MUTED }}>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{pg * PER_PAGE + 1}–{Math.min(shown.length, (pg + 1) * PER_PAGE)} of {shown.length.toLocaleString("en-IN")}</span>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2">Sort
+                    <select value={sort} onChange={e => setSort(e.target.value as any)} style={{ height: 30, borderRadius: 9, border: "none", boxShadow: t.IN, background: t.BG, color: t.INK, padding: "0 8px", fontSize: 12.5 }}>
+                      <option value="recent">Latest email first</option><option value="rates">Most rates</option><option value="name">Name A–Z</option></select></label>
+                  {pages > 1 && <div className="flex items-center gap-1">
+                    <button aria-label="Previous page" disabled={pg === 0} onClick={() => goPage(pg - 1)} style={pagerBtn(t, pg === 0)}><ChevronLeft size={15} /></button>
+                    <span style={{ minWidth: 70, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>Page {pg + 1} of {pages}</span>
+                    <button aria-label="Next page" disabled={pg >= pages - 1} onClick={() => goPage(pg + 1)} style={pagerBtn(t, pg >= pages - 1)}><ChevronRight size={15} /></button>
+                  </div>}
+                </div>
+              </div>
+            </>}
           </Card>
 
           {cur && (
-            <Card style={{ width: "100%", maxWidth: 400 }} className="xl:sticky xl:top-4" pad="22px">
+            <Card style={{ width: "100%", maxWidth: 400, maxHeight: "calc(100vh - 120px)", overflowY: "auto" }} className="xl:sticky xl:top-4" pad="22px">
               <div className="flex items-start justify-between gap-3">
-                <div style={{ minWidth: 0 }}><div className="font-serif" style={{ fontSize: 23 }}>{cur.s.name}</div>
+                <div style={{ minWidth: 0 }}><div className="font-serif" style={{ fontSize: 23, overflowWrap: "anywhere" }}>{cur.s.name}</div>
                   <Muted>{cur.type}{cur.s.place ? ` · ${cur.s.place}` : ""}{cur.fromGmail ? " · from Gmail" : ""}</Muted></div>
-                <button title="Remove" onClick={() => remove(cur.s)} style={{ background: "none", border: "none", color: t.FAINT, cursor: "pointer" }}><Trash2 size={16} /></button>
+                <button title="Delete for good" onClick={() => remove(cur.s)} style={{ background: "none", border: "none", color: t.FAINT, cursor: "pointer" }}><Trash2 size={16} /></button>
               </div>
+              {(cur.review || cur.hidden) && (
+                <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 12, background: t.GOLD_BG, fontSize: 12.5, lineHeight: 1.5 }}>
+                  {cur.hidden ? "Marked as not a supplier, so it's hidden from the list." : "Is this a supplier? Choose a type below to keep it, or hide it from the list."}
+                  <div className="flex gap-2" style={{ marginTop: 10 }}>
+                    {cur.hidden ? <Btn onClick={() => setHidden(cur.s, false)} style={{ height: 32 }}>Show it again</Btn>
+                      : <Btn onClick={() => setHidden(cur.s, true)} style={{ height: 32 }}><EyeOff size={14} />Not a supplier</Btn>}
+                  </div>
+                </div>)}
               <div style={{ marginTop: 14 }}>
                 <Row t={t} label="Type"><select value={cur.type} onChange={e => save(cur.s, { supplier_type: e.target.value })}
                   style={{ height: 32, borderRadius: 9, border: "none", boxShadow: t.IN, background: t.BG, color: t.INK, padding: "0 8px", fontSize: 12.5, width: "100%" }}>{TYPES.map(x => <option key={x}>{x}</option>)}</select></Row>
@@ -171,8 +301,8 @@ export default function SuppliersPage() {
                     <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{r.currency} {Number(r.price_per_night || r.price || 0).toLocaleString("en-IN")}{r.price_per_night ? "/night" : r.price_basis ? ` ${String(r.price_basis).replace("per_", "per ")}` : ""}</span></div>
                   <Muted>{[r.destination, r.room_type, r.meal_plan, r.vehicle_type, r.valid_from && `${fmtDate(r.valid_from, { day: "numeric", month: "short" })} – ${fmtDate(r.valid_to, { day: "numeric", month: "short", year: "2-digit" })}`].filter(Boolean).join(" · ")}</Muted>
                 </div>)) : <Muted style={{ display: "block", padding: "10px 0" }}>No {tab} rates from this supplier yet. They appear when a rate email comes in.</Muted>}
-              {cur.emails > 0 && <div style={{ marginTop: 16 }}><Muted>{cur.emails} email{cur.emails === 1 ? "" : "s"} read · last on {fmtDate(cur.last)}</Muted>
-                {cur.s.email && <a href={`https://mail.google.com/mail/u/0/#search/from%3A${encodeURIComponent(cur.s.email)}`} target="_blank" rel="noreferrer" className="flex items-center gap-1" style={{ fontSize: 12.5, color: t.TEAL, fontWeight: 600, marginTop: 6 }}><ExternalLink size={13} />Open their emails in Gmail</a>}</div>}
+              {cur.emails > 0 && <div style={{ marginTop: 16 }}><Muted>{cur.emails} email{cur.emails === 1 ? "" : "s"} read · last on {fmtDate(cur.last)}</Muted></div>}
+              {cur.s.email && <a href={`https://mail.google.com/mail/u/0/#search/from%3A${encodeURIComponent(cur.s.email)}`} target="_blank" rel="noreferrer" className="flex items-center gap-1" style={{ fontSize: 12.5, color: t.TEAL, fontWeight: 600, marginTop: 6 }}><ExternalLink size={13} />Open their emails in Gmail</a>}
             </Card>)}
         </div>
       </>}
@@ -180,6 +310,8 @@ export default function SuppliersPage() {
     </Page>
   );
 }
+
+const pagerBtn = (t: any, off: boolean): CSSProperties => ({ width: 30, height: 30, borderRadius: 9, border: "none", background: t.BG, boxShadow: off ? "none" : t.BTN, color: off ? t.FAINT : t.TEAL, cursor: off ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" });
 
 function Row({ t, label, children }: any) {
   return <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10, alignItems: "center", padding: "5px 0", fontSize: 12.5 }}><span style={{ color: t.FAINT }}>{label}</span>{children}</div>;

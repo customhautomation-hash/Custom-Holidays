@@ -9,7 +9,7 @@ import time
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Header, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from supabase_client import supabase
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 FRONTEND_URL          = os.getenv("FRONTEND_URL", "https://custom-holidays.vercel.app")
-POLL_INTERVAL_SECONDS = 600
+POLL_INTERVAL_SECONDS = 300   # while someone has the dashboard open; the Supabase timer covers the rest
 
 _last_sync:  dict[str, float]          = {}
 _sync_locks: dict[str, threading.Lock] = {}
@@ -260,20 +260,103 @@ def clear_all_processed(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _all_rows(table: str, cols: str = "*", order: str = "created_at", cap: int = 20000) -> list:
+    """Read a whole table. Supabase returns at most 1,000 rows per request, so read it in pages."""
+    out, start, size = [], 0, 1000
+    try:
+        while start < cap:
+            rows = supabase.table(table).select(cols).order(order, desc=True).range(start, start + size - 1).execute().data or []
+            out += rows
+            if len(rows) < size:
+                break
+            start += size
+    except Exception as e:
+        logger.warning("read %s: %s", table, e)
+    return out
+
+
 @router.get("/suppliers-overview")
 def suppliers_overview(authorization: Optional[str] = Header(None)):
-    """Everything the Suppliers page needs in one call: suppliers, their rates and their emails."""
+    """Everything the Suppliers page needs in one call: every supplier, their rates, and email counts per supplier."""
     _get_user_id(authorization)
-    def rows(table, cols="*", order="created_at", limit=3000):
-        try:
-            return supabase.table(table).select(cols).order(order, desc=True).limit(limit).execute().data or []
-        except Exception as e:
-            logger.warning("suppliers-overview: %s %s", table, e)
-            return []
+    stats: dict = {}
+    for e in _all_rows("gmail_processed_emails", "supplier_name, status, created_at"):
+        if e.get("status") == "irrelevant":
+            continue
+        k = (e.get("supplier_name") or "").strip().lower()
+        if not k:
+            continue
+        s = stats.setdefault(k, {"count": 0, "last": None})
+        s["count"] += 1
+        if not s["last"] or (e.get("created_at") or "") > s["last"]:
+            s["last"] = e.get("created_at")
     return {
-        "suppliers":  rows("suppliers"),
-        "hotels":     rows("supplier_hotels"),
-        "activities": rows("supplier_activities"),
-        "transfers":  rows("supplier_transfers"),
-        "emails":     rows("gmail_processed_emails", "supplier_name, status, extraction_type, created_at", limit=5000),
+        "suppliers":   _all_rows("suppliers"),
+        "hotels":      _all_rows("supplier_hotels"),
+        "activities":  _all_rows("supplier_activities"),
+        "transfers":   _all_rows("supplier_transfers"),
+        "email_stats": stats,
     }
+
+
+@router.get("/recent")
+def recent_emails(authorization: Optional[str] = Header(None), limit: int = Query(60, ge=1, le=200)):
+    """The latest emails the check looked at, newest first, for the Activity panel."""
+    user_id = _get_user_id(authorization)
+    try:
+        rows = supabase.table("gmail_processed_emails").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(limit).execute().data or []
+    except Exception as e:
+        logger.warning("recent emails: %s", e)
+        rows = []
+    return {"emails": rows}
+
+
+@router.post("/suppliers/{supplier_id}/review")
+def review_supplier(supplier_id: str, payload: dict = Body(...), authorization: Optional[str] = Header(None)):
+    """Mark a supplier as 'not a supplier' (hidden, never deleted) or bring it back."""
+    _get_user_id(authorization)
+    status = "not_supplier" if payload.get("hide") else "active"
+    supabase.table("suppliers").update({"onboarding_status": status}).eq("id", supplier_id).execute()
+    return {"ok": True, "status": status}
+
+
+# ── Automatic checks, called by a timer in Supabase (see supabase/gmail_auto_check.sql) ──
+_cron_secret: dict = {"value": None, "at": 0.0}
+
+
+def _expected_cron_secret() -> str:
+    env = os.getenv("GMAIL_CRON_SECRET", "")
+    if env:
+        return env
+    if _cron_secret["value"] and time.time() - _cron_secret["at"] < 600:
+        return _cron_secret["value"]
+    try:
+        rows = supabase.table("app_config").select("value").eq("key", "gmail_cron_secret").limit(1).execute().data or []
+        _cron_secret.update(value=rows[0]["value"] if rows else "", at=time.time())
+    except Exception as e:
+        logger.warning("cron secret: %s", e)
+        _cron_secret.update(value="", at=time.time())
+    return _cron_secret["value"] or ""
+
+
+@router.post("/cron")
+def gmail_cron(x_cron_secret: Optional[str] = Header(None)):
+    expected = _expected_cron_secret()
+    if not expected or x_cron_secret != expected:
+        raise HTTPException(status_code=401, detail="Not allowed")
+    try:
+        users = [r["user_id"] for r in (supabase.table("gmail_tokens").select("user_id, connected").execute().data or []) if r.get("connected")]
+    except Exception as e:
+        logger.error("[Cron] could not read Gmail accounts: %s", e)
+        return {"started": False}
+
+    def _run():
+        for uid in users:
+            try:
+                _last_sync[uid] = time.time()
+                run_ingestion(uid, max_emails=40)
+            except Exception as e:
+                logger.error("[Cron] check failed for %s: %s", uid[:8], e, exc_info=True)
+
+    threading.Thread(target=_run, daemon=True, name="gmail-cron").start()
+    return {"started": True, "accounts": len(users)}

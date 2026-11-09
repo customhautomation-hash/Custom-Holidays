@@ -145,10 +145,17 @@ export const STAFF: HelpSection[] = [
     id: "suppliers", group: "Suppliers", title: "Suppliers", route: "/suppliers",
     intro: "Every DMC, hotel and partner, found automatically in the company Gmail, with their rates and emails.",
     steps: [
-      "Use the type chips to filter: DMC, Hotel, Transfer, Activity and more.",
-      "Click a supplier to see their details, rates and recent emails, and to edit them.",
-      "Click Check Gmail now to look for new suppliers and rates straight away. It also runs on its own.",
+      "Use the type chips to filter: DMC, Hotel, Transport, Activity and more. Search finds a name, place, email or contact.",
+      "The list shows 50 at a time. Use the arrows at the bottom to move between pages, and Sort to put the latest emails, most rates or A–Z first.",
+      "Click a supplier to see their details and rates, and to edit them.",
+      "Gmail is checked on its own every 5 minutes. Click Check Gmail now to check straight away, and Activity to watch it happen and see the recent emails it read.",
+      "Needs review lists contacts with no clear type and no rates. Choose a type to keep one, or click Not a supplier to hide it. Nothing is deleted.",
       "Click Add supplier to add one by hand.",
+    ],
+    points: [
+      { label: "Teal dot in Recent emails", text: "Rates were saved from that email." },
+      { label: "Gold dot", text: "A supplier email was read, such as a booking confirmation, but had no prices." },
+      { label: "Grey dot", text: "Skipped: newsletters, app notifications, invites, auto-replies and personal emails." },
     ],
     tips: ["If the status bar says Gmail isn't connected, the owner needs to connect it in Profile → Connections."],
   },
@@ -302,6 +309,7 @@ export const COMPANY: HelpSection[] = [
     points: [
       { label: "Team Chat, Vouchers, Desktop alerts", text: "Run three files in Supabase → SQL Editor: supabase/team_chat.sql, supabase/vouchers.sql and supabase/push_notifications.sql. Then deploy the push-notify function with JWT verification turned off." },
       { label: "Gmail and Drive for everyone", text: "In Google Cloud (project 'automation'): finish Branding, add the Gmail and Drive scopes, click Publish app, and put the client ID and secret into Render and Vercel." },
+      { label: "Gmail checked every 5 minutes", text: "Run supabase/gmail_auto_check.sql in Supabase → SQL Editor. Until then, Gmail is only checked while someone has the Suppliers page open." },
       { label: "Branded sign-up emails", text: "Set up a sender in Supabase → Authentication → Emails → SMTP Settings (a Gmail app password needs the phone used for 2-step verification). Then paste the five designs from supabase/email_templates into Emails → Templates." },
     ],
   },

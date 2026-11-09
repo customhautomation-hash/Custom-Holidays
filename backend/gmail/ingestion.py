@@ -11,12 +11,12 @@ from datetime import datetime
 from typing import Optional, Callable
 
 from supabase_client import supabase
-from .auth import get_valid_access_token
+from .auth import get_valid_access_token, get_tokens
 from .fetcher import (
     list_messages, get_message, get_attachment,
     extract_email_body, extract_attachments,
     get_message_metadata, get_already_processed_ids,
-    mark_processed, SUPPLIER_QUERY,
+    mark_processed, SUPPLIER_QUERY, quick_skip_reason,
 )
 from .extractor import classify_email, extract_supplier_data, extract_text_from_attachment
 
@@ -34,6 +34,15 @@ _auto_poll_stop   = threading.Event()
 _latest_result: dict = {}
 _is_syncing       = False
 _sync_log: list[str] = []
+_run_lock = threading.Lock()   # one Gmail check at a time (button, timer and heartbeat can overlap)
+
+# Categories that make a sender a supplier worth adding to the Suppliers page
+SUPPLIER_CATEGORIES = EXTRACTABLE_CATEGORIES | {"BOOKING_CONFIRMATION", "CANCELLATION_POLICY"}
+CATEGORY_LABEL = {
+    "HOTEL_RATE": "hotel rates", "ACTIVITY_RATE": "activity rates", "TRANSFER_RATE": "transfer rates",
+    "CONTRACT": "contract", "GENERAL_SUPPLIER": "supplier email", "BOOKING_CONFIRMATION": "booking confirmation",
+    "CANCELLATION_POLICY": "cancellation policy",
+}
 
 
 def get_auto_poll_status() -> dict:
@@ -119,7 +128,7 @@ def _sender_email(sender: str) -> str:
     return m.group(0).lower() if m else ""
 
 
-def _upsert_supplier(supplier_name: str, sender: str, category: str = "", classification: Optional[dict] = None) -> Optional[str]:
+def _upsert_supplier(supplier_name: str, sender: str, category: str = "", classification: Optional[dict] = None, allow_new: bool = True) -> Optional[str]:
     """
     Make sure this supplier is in the `suppliers` table (Suppliers page).
     New suppliers get their type (DMC, Hotel, ...), destination and email from the email.
@@ -143,6 +152,8 @@ def _upsert_supplier(supplier_name: str, sender: str, category: str = "", classi
             if (not row.get("supplier_type") or row.get("supplier_type") == "Tour Operator") and stype: fill["supplier_type"] = stype
             if fill: supabase.table("suppliers").update(fill).eq("id", row["id"]).execute()
             return row["id"]
+        if not allow_new:
+            return None
         result = supabase.table("suppliers").insert({
             "name": supplier_name, "email": email or None, "supplier_type": stype, "place": place,
             "onboarding_status": "new", "internal_notes": "Added from Gmail",
@@ -244,14 +255,23 @@ def _insert_transfers(transfers: list[dict], result: IngestionResult) -> None:
             result.errors += 1
 
 
+def _short(subject: str) -> str:
+    subject = (subject or "(no subject)").strip()
+    return subject if len(subject) <= 60 else subject[:57] + "…"
+
+
 def run_ingestion(
     user_id: str,
     max_emails: int = 50,
     status_callback: Optional[Callable[[str], None]] = None,
 ) -> IngestionResult:
+    """Check Gmail for new supplier emails. Each email gets one plain-language line in the log."""
     global _is_syncing, _latest_result
 
     result = IngestionResult()
+    if not _run_lock.acquire(blocking=False):
+        result.log.append("A check is already running")
+        return result
     _is_syncing = True
     _sync_log.clear()
 
@@ -267,11 +287,12 @@ def run_ingestion(
     try:
         access_token = get_valid_access_token(user_id)
         if not access_token:
-            _log("No valid Gmail token — skipping ingestion")
+            _log("Gmail needs to be connected again (Profile → Connections)")
             return result
+        own_email = ((get_tokens(user_id) or {}).get("gmail_email") or "").lower()
 
+        _log("Looking for new emails")
         already_processed = get_already_processed_ids(user_id)
-        _log(f"Already processed: {len(already_processed)} emails")
 
         messages, page_token, pages = [], None, 0
         while len([m for m in messages if m["id"] not in already_processed]) < max_emails and pages < 30:
@@ -282,49 +303,54 @@ def run_ingestion(
                 break
         messages = [m for m in messages if m["id"] not in already_processed][:max_emails]
         result.fetched = len(messages)
-        _log(f"Found {len(messages)} new messages to check")
+        _log(f"{len(messages)} new email{'s' if len(messages) != 1 else ''} to check" if messages else "No new emails")
 
         for msg_ref in messages:
             msg_id = msg_ref["id"]
-
-            if msg_id in already_processed:
-                result.skipped_already_processed += 1
-                continue
-
             try:
                 message = get_message(access_token, msg_id)
                 meta = get_message_metadata(message)
+                subject, sender = meta["subject"], meta["from"]
+                sender_name = (sender.split("<")[0].strip().strip('"') or sender)[:40]
+                head = f"“{_short(subject)}” from {sender_name}"
+
+                # 1. Obvious non-supplier mail never reaches the AI
+                reason = quick_skip_reason(meta, own_email)
+                if reason:
+                    mark_processed(user_id, msg_id, meta["thread_id"], "irrelevant", "", "", subject, sender, f"Skipped: {reason}")
+                    result.skipped_irrelevant += 1
+                    _log(f"Skipped {head} · {reason}")
+                    continue
+
+                # 2. The AI decides whether it is a supplier email
                 body = extract_email_body(message)
-                attachments = extract_attachments(message)
-
-                _log(f"\nProcessing: {meta['subject'][:60]}")
-
-                classification = classify_email(
-                    subject=meta["subject"],
-                    body=body,
-                    sender=meta["from"],
-                )
+                classification = classify_email(subject=subject, body=body, sender=sender)
                 category      = classification.get("category", "IRRELEVANT")
                 supplier_name = classification.get("supplier_name", "Unknown Supplier")
-                confidence    = classification.get("confidence", 0)
+                supplier_type = (classification.get("supplier_type") or "").strip()
+                confidence    = float(classification.get("confidence", 0) or 0)
 
-                _log(f"  → {category} ({confidence:.0%}) — {supplier_name}")
-
-                if category == "IRRELEVANT" or confidence < 0.5:
-                    mark_processed(user_id, msg_id, meta["thread_id"], "irrelevant", supplier_name)
+                if category == "IRRELEVANT" or confidence < 0.6:
+                    mark_processed(user_id, msg_id, meta["thread_id"], "irrelevant", supplier_name, category, subject, sender, "Not a supplier email")
                     result.skipped_irrelevant += 1
+                    _log(f"Skipped {head} · not a supplier email")
                     continue
 
-                # Upsert into suppliers table — links to SupplierReachout / ActiveDeals
-                supplier_id = _upsert_supplier(supplier_name, meta["from"], category, classification)
+                # 3. Only real supplier companies are added; vague "Other" senders are not
+                is_supplier = category in SUPPLIER_CATEGORIES and confidence >= 0.7 and supplier_type.lower() not in ("other", "")
+                supplier_id = _upsert_supplier(supplier_name, sender, category, classification, allow_new=is_supplier)
                 if supplier_id:
                     result.suppliers_created += 1
+                label = CATEGORY_LABEL.get(category, "supplier email")
 
                 if category not in EXTRACTABLE_CATEGORIES:
-                    mark_processed(user_id, msg_id, meta["thread_id"], category.lower(), supplier_name)
+                    note = f"{label.capitalize()} from {supplier_name}"
+                    mark_processed(user_id, msg_id, meta["thread_id"], category.lower(), supplier_name, category, subject, sender, note)
+                    _log(f"Read {head} · {label}")
                     continue
 
-                # Process attachments
+                # 4. Read attachments and pull out rates
+                attachments = extract_attachments(message)
                 attachment_text = ""
                 for att in attachments:
                     try:
@@ -332,54 +358,50 @@ def run_ingestion(
                         att_text = extract_text_from_attachment(att_bytes, att["filename"])
                         if att_text:
                             attachment_text += f"\n\n--- {att['filename']} ---\n{att_text}"
-                        _log(f"  ↳ Attachment: {att['filename']}")
                     except Exception as e:
-                        _log(f"  ⚠ Attachment error {att['filename']}: {e}")
+                        logger.warning("Attachment %s failed: %s", att.get("filename"), e)
 
                 source_date = meta["date"][:10] if meta.get("date") else None
                 extracted = extract_supplier_data(
-                    body=body,
-                    subject=meta["subject"],
-                    sender=meta["from"],
-                    supplier_name=supplier_name,
-                    source_email_id=msg_id,
-                    source_date=source_date,
-                    attachment_text=attachment_text,
+                    body=body, subject=subject, sender=sender, supplier_name=supplier_name,
+                    source_email_id=msg_id, source_date=source_date, attachment_text=attachment_text,
                 )
-
                 hotels     = extracted.get("hotels", [])
                 activities = extracted.get("activities", [])
                 transfers  = extracted.get("transfers", [])
-                total      = len(hotels) + len(activities) + len(transfers)
 
-                _log(f"  Extracted: {len(hotels)} hotels, {len(activities)} activities, {len(transfers)} transfers")
-
-                if total > 0:
+                before = result.hotels_added + result.activities_added + result.transfers_added
+                if hotels or activities or transfers:
                     _insert_hotels(hotels, result)
                     _insert_activities(activities, result)
                     _insert_transfers(transfers, result)
+                saved = result.hotels_added + result.activities_added + result.transfers_added - before
+                if saved:
                     result.extracted += 1
-                    mark_processed(user_id, msg_id, meta["thread_id"], "processed", supplier_name, category)
+                    note = f"{saved} rate{'s' if saved != 1 else ''} saved for {supplier_name}"
+                    mark_processed(user_id, msg_id, meta["thread_id"], "processed", supplier_name, category, subject, sender, note)
+                    _log(f"Saved {saved} rate{'s' if saved != 1 else ''} from {head}")
                 else:
-                    _log("  No structured data extracted")
-                    mark_processed(user_id, msg_id, meta["thread_id"], "no_data", supplier_name, category)
+                    mark_processed(user_id, msg_id, meta["thread_id"], "no_data", supplier_name, category, subject, sender, f"{label.capitalize()}, no prices found")
+                    _log(f"Read {head} · {label}, no prices found")
 
             except Exception as e:
                 logger.error("Error processing %s: %s", msg_id, e)
-                _log(f"  ERROR: {e}")
+                _log("Couldn't read one email, it will be tried again next time")
                 result.errors += 1
 
-        summary = (
-            f"\n✓ Done: {result.extracted} extracted | "
-            f"{result.hotels_added}H {result.activities_added}A {result.transfers_added}T | "
-            f"{result.suppliers_created} suppliers | "
-            f"{result.errors} errors"
-        )
-        _log(summary)
+        if messages:
+            rates = result.hotels_added + result.activities_added + result.transfers_added
+            _log(f"Done · {rates} rate{'s' if rates != 1 else ''} saved · {result.suppliers_created} supplier{'s' if result.suppliers_created != 1 else ''} updated · {result.skipped_irrelevant} skipped")
         _latest_result = result.to_dict()
-        _latest_result["last_run"] = datetime.utcnow().isoformat()
+        _latest_result["last_run"] = datetime.utcnow().isoformat() + "Z"
 
+    except Exception as e:
+        logger.error("Gmail check failed: %s", e, exc_info=True)
+        _log("The check stopped early. It will run again on its own")
+        result.errors += 1
     finally:
         _is_syncing = False
+        _run_lock.release()
 
     return result
