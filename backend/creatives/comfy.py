@@ -46,13 +46,15 @@ def post(path: str, **kw) -> requests.Response:
 
 def status(max_age: float = 20.0) -> dict:
     """Is the video PC reachable right now? Cached for a few seconds."""
-    if _status_cache["value"] and time.time() - _status_cache["at"] < max_age:
-        return _status_cache["value"]
+    cached = _status_cache["value"]
+    # an offline PC is re-checked less often, so the page never waits on a PC that's switched off
+    if cached and time.time() - _status_cache["at"] < (max_age if cached.get("online") or max_age < 10 else 60):
+        return cached
     if not configured():
         value = {"online": False, "reason": "not_set_up"}
     else:
         try:
-            r = get("/system_stats", timeout=8)
+            r = get("/system_stats", timeout=(3, 4))   # quick: the page asks every 30 s
             if r.status_code == 401:
                 value = {"online": False, "reason": "wrong_key"}
             elif not r.ok:
@@ -62,7 +64,7 @@ def status(max_age: float = 20.0) -> dict:
                 dev = (d.get("devices") or [{}])[0]
                 q = {}
                 try:
-                    q = get("/queue", timeout=8).json()
+                    q = get("/queue", timeout=(3, 4)).json()
                 except Exception:
                     pass
                 value = {"online": True, "gpu": re.sub(r"^\w+:\d+\s+", "", (dev.get("name") or "").split(" : ")[0]).strip(),
