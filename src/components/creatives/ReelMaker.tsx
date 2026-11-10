@@ -259,7 +259,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               <div className="flex items-baseline justify-between gap-3 flex-wrap" style={{ marginBottom: 12 }}>
                 <b style={{ fontSize: 15 }}>Look</b>{plan?.kind && <Muted>Planned as: <b style={{ color: t.INK, fontWeight: 600 }}>{plan.kind}</b></Muted>}
               </div>
-              <div className="grid gap-x-6 gap-y-2.5 grid-cols-1 lg:grid-cols-2">
+              <div className="grid gap-x-8 gap-y-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
                   <Mini t={t} label="Words" value={fmt.style || "classic"} options={[["classic", "Classic"], ["label", "Label"], ["meme", "Meme"], ["handwritten", "Handwritten"], ["bold", "Bold"], ["none", "None"]]} onChange={v => setFmt(f => ({ ...f, style: v as TextStyle }))} />
                   <Mini t={t} label="Colour" value={grade} options={[["natural", "Natural"], ["warm", "Warm"], ["film", "Film"], ["moody", "Moody"], ["vibrant", "Vibrant"], ["dreamy", "Dreamy"]]} onChange={v => setGrade(v as Grade)} />
                   <Mini t={t} label="Frame" value={frame} options={[["full", "Full"], ["cinematic", "Cinematic bars"]]} onChange={v => setFrame(v as FrameStyle)} />
@@ -503,9 +503,11 @@ function TrendingIdeas({ t, state, picked, onPick, onMore }: { t: T; state: Idea
 }
 
 function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
-  return <div className="flex items-center gap-1.5 flex-wrap"><span style={{ fontSize: 12, color: t.FAINT, width: 72, flexShrink: 0 }}>{label}</span>
-    {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} aria-pressed={value === v} style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
-      background: value === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: value === v ? "#fff" : t.MUTED, boxShadow: value === v ? "none" : t.BTN }}>{l}</button>)}</div>;
+  // the label sits in its own column; if the options wrap, they wrap under each other (never under the label)
+  return <div className="flex items-start gap-2"><span style={{ fontSize: 12, color: t.FAINT, width: 72, flexShrink: 0, lineHeight: "26px" }}>{label}</span>
+    <div className="flex flex-wrap gap-1.5 min-w-0">
+    {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} aria-pressed={value === v} style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+      background: value === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: value === v ? "#fff" : t.MUTED, boxShadow: value === v ? "none" : t.BTN }}>{l}</button>)}</div></div>;
 }
 function Toggle({ t, on, onClick, I, label, disabled }: { t: T; on: boolean; onClick: () => void; I: any; label: string; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} aria-pressed={on} style={{ height: 32, padding: "0 12px", borderRadius: 99, border: "none", cursor: disabled ? "default" : "pointer", fontSize: 12.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6,
