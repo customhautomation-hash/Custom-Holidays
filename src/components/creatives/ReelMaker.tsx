@@ -5,23 +5,42 @@
  * 3. Text, title, logo, end card and music are switched on or off with buttons, previewed live,
  *    and the reel is recorded in the browser as an MP4 (1080×1920).
  */
-import { CSSProperties, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { PageVisible } from "@/components/AppGuards";
 import { Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
-import { W, H, END, ReelLook, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
+import { W, H, END, ReelLook, TextStyle, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
 type Clip = { id: string; image_prompt: string; video_prompt: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string };
 type Plan = { title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string };
 
+/** Kinds of reel. Each one changes how the plan is written, how text looks and how fast clips change. */
+const STYLES: { k: string; l: string; hint: string; text: TextStyle; fade: number; example: string }[] = [
+  { k: "film", l: "Destination film", hint: "Slow and cinematic, a short line on each clip", text: "caption", fade: 0.45,
+    example: "Kyoto in cherry blossom season for couples. Calm and luxurious: Fushimi Inari at dawn, the Philosopher's Path, a private tea ceremony, a ryokan garden. End with: Plan your spring escape." },
+  { k: "list", l: "Top list", hint: "\"5 things to do in…\", numbered clips", text: "label", fade: 0.35,
+    example: "5 unforgettable experiences in Bali for couples: Ubud rice terraces, a private villa breakfast, Uluwatu temple at sunset, a jungle swing, a beach club day." },
+  { k: "days", l: "Day by day", hint: "An itinerary: Day 1, Day 2…", text: "label", fade: 0.35,
+    example: "7 days in Switzerland for a family: Zurich, Lucerne, the Glacier Express, Zermatt and the Matterhorn, Interlaken, Jungfraujoch." },
+  { k: "hotel", l: "Hotel spotlight", hint: "One property: villa, pool, dining, spa", text: "caption", fade: 0.45,
+    example: "Soneva Jani, Maldives: overwater villa with a slide, the lagoon from above, sunset dinner on the deck, the observatory, spa by the sea." },
+  { k: "offer", l: "Offer", hint: "A package with your price and dates", text: "bold", fade: 0.3,
+    example: "Dubai long weekend offer: 4 nights at Atlantis The Royal, private transfers, desert safari and breakfast daily. From ₹1.85L per couple. Valid till 31 March. Message us to book." },
+  { k: "fast", l: "Fast and punchy", hint: "Quick cuts, 1–3 bold words", text: "bold", fade: 0.2,
+    example: "Santorini in summer, fast and fun: white houses, blue domes, boat trip, sunset in Oia, cliffside pool, wine tasting." },
+];
+
 const uid = () => Math.random().toString(36).slice(2, 9);
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolean; board: { dest: string; scenes: BoardScene[] } }) {
+export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; videoOn: boolean; board: { dest: string; scenes: BoardScene[] }; active?: boolean }) {
   const [brief, setBrief] = useState("");
   const [seconds, setSeconds] = useState(30);
+  const [style, setStyle] = useState("film");
+  const S = STYLES.find(x => x.k === style) || STYLES[0];
   const [source, setSource] = useState<"new" | "board">("new");
   const [opt, setOpt] = useState({ text: true, title: true, logo: true, end: true, music: false, moving: false });
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -46,8 +65,9 @@ export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolea
     setBusy("Planning the reel"); setClips([]); setPlan(null);
     try {
       const n = source === "board" ? boardReady.length : 0;
-      const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
+      const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n, style });
       setPlan({ title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood });
+      if (p.end_sub) setEndSub(p.end_sub);
       if (source === "board") {
         setClips(boardReady.map((s, i) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: p.scenes[i]?.on_screen_text || "",
           seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "" })));
@@ -85,7 +105,7 @@ export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolea
   };
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
-  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub };
+  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, textStyle: S.text, fade: S.fade };
   const usable = clips.filter(c => c.video || c.image);
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
 
@@ -94,10 +114,21 @@ export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolea
       <Card pad="20px">
         <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-4">
-            <div><Label t={t}>What's the reel about?</Label>
-              <Prompt t={t} rows={3} value={brief} onChange={setBrief} placeholder="Kyoto in cherry blossom season for couples: calm, luxurious, ryokan and private tea ceremony. End with: plan your spring escape" /></div>
+            <div><Label t={t}>Kind of reel</Label>
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))" }}>
+                {STYLES.map(x => (
+                  <button key={x.k} onClick={() => setStyle(x.k)} aria-pressed={style === x.k}
+                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 12, border: "none", cursor: "pointer", background: style === x.k ? (t.dark ? "#1F6F72" : "#13585B") : t.BG,
+                      color: style === x.k ? "#fff" : t.INK, boxShadow: style === x.k ? "none" : t.BTN }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{x.l}</div>
+                    <div style={{ fontSize: 11.5, marginTop: 2, color: style === x.k ? "rgba(255,255,255,.8)" : t.MUTED, lineHeight: 1.35 }}>{x.hint}</div>
+                  </button>))}
+              </div></div>
+            <div><div className="flex items-baseline justify-between gap-3"><Label t={t}>What's the reel about?</Label>
+              <button onClick={() => setBrief(S.example)} style={{ background: "none", border: "none", padding: 0, color: t.TEAL, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Use an example</button></div>
+              <Prompt t={t} rows={3} value={brief} onChange={setBrief} placeholder={S.example} /></div>
             <div className="flex gap-6 flex-wrap">
-              <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
+              <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45, 60].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
               <div><Label t={t}>Clips</Label><Chips t={t} value={source} options={[{ v: "new", l: "New clips from the brief" }, { v: "board", l: `Storyboard clips${boardReady.length ? ` · ${boardReady.length}` : ""}` }]} onChange={setSource} /></div>
             </div>
           </div>
@@ -175,7 +206,7 @@ export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolea
               </Card>)}
           </div>
 
-          <Preview t={t} clips={usable} look={look} music={opt.music ? music : null} volume={volume} name={(brief || board.dest || "reel").slice(0, 40)} />
+          <Preview t={t} active={active} clips={usable} look={look} music={opt.music ? music : null} volume={volume} name={(brief || board.dest || "reel").slice(0, 40)} />
         </div>)}
     </div>
   );
@@ -196,7 +227,8 @@ function IconBtn({ t, title, onClick, disabled, children }: { t: T; title: strin
 }
 
 /** Live preview on a canvas, plus export. Media is loaded once and reused while text and timings change. */
-function Preview({ t, clips, look, music, volume, name }: { t: T; clips: Clip[]; look: ReelLook; music: File | null; volume: number; name: string }) {
+function Preview({ t, active, clips, look, music, volume, name }: { t: T; active: boolean; clips: Clip[]; look: ReelLook; music: File | null; volume: number; name: string }) {
+  const pageVisible = useContext(PageVisible);
   const canvas = useRef<HTMLCanvasElement>(null);
   const player = useRef<ReelPlayer | null>(null);
   const cache = useRef(new Map<string, Promise<HTMLImageElement | HTMLVideoElement>>());
@@ -243,17 +275,16 @@ function Preview({ t, clips, look, music, volume, name }: { t: T; clips: Clip[];
   }, [music]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (audio.current) audio.current.volume = volume; }, [volume]);
 
+  // One player for the life of the preview. New clips, text or settings are swapped in without stopping playback.
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx || !L) return;
-    const wasPlaying = player.current?.playing;
-    const at = player.current?.t || 0;
-    player.current?.pause();
-    player.current = new ReelPlayer(ctx, L, look, setTime, audio.current);
-    player.current.seek(Math.min(at, player.current.total));
-    if (wasPlaying) { player.current.play(() => setPlaying(false)); }
-    return () => { player.current?.pause(); };
-  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, music]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!player.current) { player.current = new ReelPlayer(ctx, L, look, setTime, audio.current); player.current.seek(0); }
+    else player.current.update(L, look, audio.current);
+  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.textStyle, look.fade, music]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { player.current?.pause(); }, []);
+  // Stop the preview (and its music) when you leave the Reel tab or the page
+  useEffect(() => { if ((!active || !pageVisible) && player.current?.playing) { player.current.pause(); setPlaying(false); } }, [active, pageVisible]);
 
   const total = L ? totalOf(L.items, look) : 0;
   const toggle = () => { const p = player.current; if (!p) return; if (p.playing) { p.pause(); setPlaying(false); } else { p.play(() => setPlaying(false)); setPlaying(true); } };

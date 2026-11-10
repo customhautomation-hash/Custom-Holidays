@@ -6,7 +6,9 @@
 export const W = 1080, H = 1920, FPS = 30, FADE = 0.45, END = 3;
 
 export type ReelClip = { kind: "image" | "video"; src: string; seconds: number; text: string };
-export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string };
+/** caption: line at the bottom · label: "1 · Kyoto" / "Day 2 · Hakone" with a gold kicker · bold: big centred words */
+export type TextStyle = "caption" | "label" | "bold";
+export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; textStyle?: TextStyle; fade?: number };
 export type Item = { el: HTMLImageElement | HTMLVideoElement; kind: "image" | "video"; seconds: number; text: string };
 export type Loaded = { items: Item[]; logo: HTMLImageElement | null };
 
@@ -74,6 +76,7 @@ const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 /** Draws the reel as it looks at time t (seconds). */
 export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look: ReelLook) {
   const items = L.items;
+  const fade = look.fade ?? FADE;
   ctx.fillStyle = "#0C2C32"; ctx.fillRect(0, 0, W, H);
   let start = 0, i = 0;
   for (; i < items.length; i++) { if (t < start + items[i].seconds) break; start += items[i].seconds; }
@@ -81,13 +84,15 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
 
   if (i < items.length) {
     const lt = t - start;
-    if (i > 0 && lt < FADE) drawItem(ctx, items[i - 1], i - 1, items[i - 1].seconds + lt);
-    ctx.save(); ctx.globalAlpha = i > 0 && lt < FADE ? ease(lt / FADE) : 1; drawItem(ctx, items[i], i, lt); ctx.restore();
+    if (i > 0 && lt < fade) drawItem(ctx, items[i - 1], i - 1, items[i - 1].seconds + lt);
+    ctx.save(); ctx.globalAlpha = i > 0 && lt < fade ? ease(lt / fade) : 1; drawItem(ctx, items[i], i, lt); ctx.restore();
 
     const it = items[i];
     const showTitle = look.showTitle && i === 0 && look.title && lt < Math.min(it.seconds, 3.4);
     const showText = look.showText && it.text && !showTitle;
-    if (showTitle || showText) {
+    if (showText && look.textStyle === "bold") {
+      ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
+    } else if (showTitle || showText) {
       const g = ctx.createLinearGradient(0, showTitle ? 0 : H * 0.55, 0, showTitle ? H * 0.5 : H);
       g.addColorStop(showTitle ? 0 : 0, showTitle ? "rgba(0,0,0,.42)" : "rgba(0,0,0,0)");
       g.addColorStop(1, showTitle ? "rgba(0,0,0,0)" : "rgba(0,0,0,.5)");
@@ -97,13 +102,25 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
       const a = Math.min(ease((lt - 0.2) / 0.5), ease((Math.min(it.seconds, 3.4) - lt) / 0.4));
       textBlock(ctx, look.title, SERIF, 96, H * 0.24, a);
     } else if (showText) {
-      const a = Math.min(ease((lt - 0.25) / 0.45), ease((it.seconds - lt) / 0.35));
-      textBlock(ctx, it.text, SANS, 60, H * 0.8, a);
+      const a = Math.min(ease((lt - 0.2) / 0.4), ease((it.seconds - lt) / 0.3));
+      const style = look.textStyle || "caption";
+      if (style === "bold") {
+        textBlock(ctx, it.text, SANS.replace("600", "800"), 104, H * 0.5, a);
+      } else if (style === "label") {
+        const [kicker, ...rest] = it.text.split(/\s*[·|:–-]\s+/);
+        const main = rest.join(" · ");
+        if (main) {
+          textBlock(ctx, kicker, SANS, 46, H * 0.74, a, "#D4AF5A");
+          textBlock(ctx, main, SERIF, 82, H * 0.8, a);
+        } else textBlock(ctx, it.text, SERIF, 82, H * 0.79, a);
+      } else {
+        textBlock(ctx, it.text, SANS, 60, H * 0.8, a);
+      }
     }
   } else if (look.endCard) {
     const lt = t - clipsEnd;
-    if (items.length && lt < FADE) drawItem(ctx, items[items.length - 1], items.length - 1, items[items.length - 1].seconds + lt);
-    ctx.save(); ctx.globalAlpha = ease(lt / FADE); ctx.fillStyle = "#0C2C32"; ctx.fillRect(0, 0, W, H);
+    if (items.length && lt < fade) drawItem(ctx, items[items.length - 1], items.length - 1, items[items.length - 1].seconds + lt);
+    ctx.save(); ctx.globalAlpha = ease(lt / fade); ctx.fillStyle = "#0C2C32"; ctx.fillRect(0, 0, W, H);
     const a = ease((lt - 0.2) / 0.5);
     ctx.globalAlpha = a;
     if (L.logo) { const s = 260; ctx.drawImage(L.logo, (W - s) / 2, H * 0.36 - s / 2, s, s); }
@@ -120,13 +137,13 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
 }
 
 /** Keeps the video clips in step with the reel's clock. */
-function syncVideos(L: Loaded, t: number, playing: boolean) {
+function syncVideos(L: Loaded, t: number, playing: boolean, fade = FADE) {
   let start = 0;
   L.items.forEach((it, i) => {
     const s = start; start += it.seconds;
     if (it.kind !== "video") return;
     const v = it.el as HTMLVideoElement;
-    const active = t >= s - 0.05 && t < start + FADE;
+    const active = t >= s - 0.05 && t < start + fade;
     const lt = Math.max(0, Math.min(t - s, (v.duration || it.seconds) - 0.05));
     if (!active) { if (!v.paused) v.pause(); return; }
     if (playing) { if (v.paused) { v.currentTime = lt; v.play().catch(() => {}); } }
@@ -136,10 +153,18 @@ function syncVideos(L: Loaded, t: number, playing: boolean) {
 
 export class ReelPlayer {
   t = 0; playing = false; private raf = 0; private t0 = 0;
-  constructor(private ctx: CanvasRenderingContext2D, public L: Loaded, public look: ReelLook, private onTime?: (t: number) => void, private music?: HTMLAudioElement | null) {}
+  constructor(private ctx: CanvasRenderingContext2D, public L: Loaded, public look: ReelLook, private onTime?: (t: number) => void, public music?: HTMLAudioElement | null) {}
+  /** Swap in new clips, text or settings without stopping playback. */
+  update(L: Loaded, look: ReelLook, music?: HTMLAudioElement | null) {
+    const musicChanged = music !== this.music;
+    if (musicChanged) { this.music?.pause(); this.music = music; if (this.playing && music) { music.currentTime = this.t; music.play().catch(() => {}); } }
+    this.L = L; this.look = look;
+    if (this.t > this.total) this.t = this.total;
+    if (!this.playing) this.draw();
+  }
   get total() { return totalOf(this.L.items, this.look); }
   draw() { drawAt(this.ctx, this.t, this.L, this.look); }
-  seek(t: number) { this.t = Math.max(0, Math.min(t, this.total)); syncVideos(this.L, this.t, false); if (this.music) this.music.currentTime = this.t; this.draw(); this.onTime?.(this.t); }
+  seek(t: number) { this.t = Math.max(0, Math.min(t, this.total)); syncVideos(this.L, this.t, false, this.look.fade); if (this.music) this.music.currentTime = this.t; this.draw(); this.onTime?.(this.t); }
   play(onEnd?: () => void) {
     if (this.t >= this.total - 0.05) this.t = 0;
     this.playing = true; this.t0 = performance.now() - this.t * 1000;
@@ -148,12 +173,12 @@ export class ReelPlayer {
       if (!this.playing) return;
       this.t = (performance.now() - this.t0) / 1000;
       if (this.t >= this.total) { this.t = this.total; this.draw(); this.pause(); this.onTime?.(this.t); onEnd?.(); return; }
-      syncVideos(this.L, this.t, true); this.draw(); this.onTime?.(this.t);
+      syncVideos(this.L, this.t, true, this.look.fade); this.draw(); this.onTime?.(this.t);
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
   }
-  pause() { this.playing = false; cancelAnimationFrame(this.raf); syncVideos(this.L, this.t, false); this.music?.pause(); }
+  pause() { this.playing = false; cancelAnimationFrame(this.raf); syncVideos(this.L, this.t, false, this.look.fade); this.music?.pause(); }
 }
 
 /** The best format this browser can record: MP4 where possible (Chrome, Edge), otherwise WebM. */

@@ -141,14 +141,38 @@ clouds, gentle camera drift). 2-3 sentences max.
         "video_prompt": "Animate: Gentle wind moves through the scene. Clouds drift slowly. Camera slowly pushes forward.",
     }
 
-def plan_reel(brief: str, seconds: int = 30, clip_count: int = 0) -> dict:
+REEL_STYLES = {
+    "film": ("Destination film", 4.0,
+             "A slow, cinematic mood piece. On-screen text is a short, evocative line per clip."),
+    "list": ("Top list", 3.5,
+             "A numbered list reel, e.g. '5 experiences in Kyoto'. The title states the list. "
+             "on_screen_text for each clip is '<number> · <name of the place or experience>', e.g. '1 · Fushimi Inari'. "
+             "Number every clip in order, starting at 1."),
+    "days": ("Day by day", 3.5,
+             "A day-by-day itinerary reel. on_screen_text for each clip is 'Day <n> · <place or highlight>', e.g. 'Day 2 · Hakone'. "
+             "Follow the order of a real trip."),
+    "hotel": ("Hotel spotlight", 3.5,
+              "One hotel or resort only: arrival, the view, the room or villa, the pool, dining, spa, a signature experience. "
+              "Use the real hotel name from the brief. on_screen_text names each feature, e.g. 'Overwater villa'."),
+    "offer": ("Offer", 3.0,
+              "A package or offer announcement. Use ONLY prices, dates and inclusions written in the brief; never invent any. "
+              "The title is the offer's hook. on_screen_text is short and bold, e.g. '5 nights', 'Private transfers', 'Breakfast daily'. "
+              "end_line is the call to action, e.g. 'Message us to book'. Put the price line from the brief in end_sub if there is one."),
+    "fast": ("Fast and punchy", 2.0,
+             "A fast, energetic reel with quick cuts. on_screen_text is 1 to 3 punchy words per clip. Use more clips, each short."),
+}
+
+
+def plan_reel(brief: str, seconds: int = 30, clip_count: int = 0, style: str = "film") -> dict:
     """Plan a short vertical reel from a brief: scenes with on-screen text, a title, an end line,
-    an Instagram caption, hashtags and the kind of music that fits."""
+    an Instagram caption, hashtags and the kind of music that fits. `style` picks the kind of reel."""
     seconds = max(10, min(int(seconds or 30), 90))
-    scenes = clip_count or max(3, min(10, round(seconds / 4)))
+    style = style if style in REEL_STYLES else "film"
+    style_name, per_clip, style_rules = REEL_STYLES[style]
+    scenes = clip_count or max(3, min(14, round((seconds - 3) / per_clip)))
     prompt = f"""
 You are the social media lead of Custom Holidays, a luxury travel company in Mumbai.
-Plan a {seconds}-second vertical Instagram reel (9:16) from this brief:
+Plan a {seconds}-second vertical Instagram reel (9:16), style "{style_name}", from this brief:
 
 "{brief}"
 
@@ -165,10 +189,13 @@ Return ONLY a valid JSON object. No markdown, no explanation.
     }}
   ],
   "end_line": "closing line for the end card, max 8 words",
+  "end_sub": "second line for the end card (only a price or date from the brief), or empty",
   "caption": "Instagram caption, 2-4 short lines, warm and refined, one call to action to message us",
   "hashtags": ["#luxurytravel", "..."],
   "music_mood": "e.g. calm piano, upbeat acoustic"
 }}
+
+Style "{style_name}": {style_rules}
 
 Rules:
 - Exactly {scenes} scenes. Their seconds add up to about {seconds - 3} (the end card adds 3 seconds).
@@ -195,7 +222,7 @@ Rules:
             "image_prompt": str(s["image_prompt"]).strip(),
             "video_prompt": str(s.get("video_prompt") or "Animate: very slow camera push forward.").strip(),
             "on_screen_text": str(s.get("on_screen_text") or "").strip(),
-            "seconds": max(1.5, min(sec, 8.0)),
+            "seconds": max(1.2, min(sec, 8.0)),
         })
     if not clean:
         raise Exception("The reel plan came back empty. Please try again")
@@ -206,6 +233,8 @@ Rules:
         "title": str(plan.get("title") or "").strip(),
         "scenes": clean,
         "end_line": str(plan.get("end_line") or "").strip(),
+        "end_sub": str(plan.get("end_sub") or "").strip(),
+        "style": style,
         "caption": str(plan.get("caption") or "").strip(),
         "hashtags": [("#" + str(t).lstrip("#")).strip() for t in tags if str(t).strip()][:20],
         "music_mood": str(plan.get("music_mood") or "").strip(),

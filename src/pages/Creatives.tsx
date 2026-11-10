@@ -87,7 +87,7 @@ export default function Creatives() {
       <div style={{ display: mode === "text-video" ? "block" : "none" }}><TextVideo t={t} videoOn={videoOn} /></div>
       <div style={{ display: mode === "image-video" ? "block" : "none" }}><ImageVideo t={t} videoOn={videoOn} handoff={handoff} /></div>
       <div style={{ display: mode === "storyboard" ? "block" : "none" }}><Storyboard t={t} videoOn={videoOn} onChange={(dest, scenes) => setBoard({ dest, scenes })} /></div>
-      <div style={{ display: mode === "reel" ? "block" : "none" }}><ReelMaker t={t} videoOn={videoOn} board={board} /></div>
+      <div style={{ display: mode === "reel" ? "block" : "none" }}><ReelMaker t={t} videoOn={videoOn} board={board} active={mode === "reel"} /></div>
     </Page>
   );
 }

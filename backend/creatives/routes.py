@@ -409,6 +409,7 @@ class ReelPlanRequest(BaseModel):
     brief: str
     seconds: int = 30
     clip_count: int = 0
+    style: str = "film"
 
 
 @router.post("/reel/plan")
@@ -417,7 +418,7 @@ def reel_plan(req: ReelPlanRequest):
     if not req.brief.strip():
         raise HTTPException(status_code=400, detail="Describe the reel first")
     try:
-        return {"success": True, "plan": plan_reel(req.brief.strip(), req.seconds, req.clip_count)}
+        return {"success": True, "plan": plan_reel(req.brief.strip(), req.seconds, req.clip_count, req.style)}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e) if "reel" in str(e).lower() else "The reel couldn't be planned just now. Please try again in a minute")
 
