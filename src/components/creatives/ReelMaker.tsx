@@ -7,15 +7,18 @@
  */
 import { CSSProperties, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PageVisible } from "@/components/AppGuards";
-import { Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
+import { Upload, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
+import { API_ROOT } from "@/lib/api";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
 import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
-type Clip = { id: string; image_prompt: string; video_prompt: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string };
-type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string };
+type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number };
+type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string };
+type Visuals = "ai" | "photo" | "video";
+type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string };
 
 /** Ideas to start from. They only fill in the brief: any kind of reel can be typed. */
 const IDEAS: { l: string; brief: string }[] = [
@@ -41,6 +44,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [clips, setClips] = useState<Clip[]>([]);
   const [endSub, setEndSub] = useState("");
   const [music, setMusic] = useState<File | null>(null);
+  const [musicCredit, setMusicCredit] = useState("");
+  const [visuals, setVisuals] = useState<Visuals>("photo");
   const [volume, setVolume] = useState(0.8);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -60,26 +65,27 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     try {
       const n = source === "board" ? boardReady.length : 0;
       const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
-      setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood });
+      setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "" });
       if (p.format) { setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium" }); setPace(p.format.pace || "slow"); }
       if (p.end_sub) setEndSub(p.end_sub);
       if (source === "board") {
         setClips(boardReady.map((s, i) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: p.scenes[i]?.on_screen_text || "",
-          seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "" })));
+          seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "", photo_query: "", credit: "", pick: 0 })));
         return;
       }
-      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "" }));
+      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "", photo_query: s.photo_query || "", credit: "", pick: 0 }));
       setClips(list);
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) return;
-        setBusy(`Making picture ${i + 1} of ${list.length}`);
+        setBusy(`${visuals === "ai" ? "Making picture" : visuals === "video" ? "Finding a real video clip" : "Finding a real photo"} ${i + 1} of ${list.length}`);
         upd(list[i].id, { status: "picture" });
-        try { const img = await makePicture(list[i].image_prompt, "9:16"); list[i].image = img; upd(list[i].id, { image: img, status: "ready" }); }
-        catch { upd(list[i].id, { status: "error", note: "Picture couldn't be made. Try again from the clip" }); }
+        const got = await getVisual(list[i], visuals, 0);
+        Object.assign(list[i], got);
+        upd(list[i].id, got);
       }
       if (opt.moving && videoOn) {
         for (let i = 0; i < list.length; i++) {
-          if (cancel.current || !list[i].image) continue;
+          if (cancel.current || !list[i].image || list[i].video) continue;
           setBusy(`Making moving clip ${i + 1} of ${list.length} on the main PC`);
           upd(list[i].id, { status: "video" });
           try {
@@ -93,15 +99,30 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   };
   const stop = () => { cancel.current = true; setBusy(""); stopOnServer(undefined, "ltx23.json"); setClips(l => l.map(c => (c.status === "picture" || c.status === "video" ? { ...c, status: c.image ? "ready" : "error" } : c))); };
 
+  /** A picture or clip for one scene: real photo / real video clip (falls back to an AI picture), or an AI picture. */
+  const getVisual = async (c: Clip, kind: Visuals, pick: number): Promise<Partial<Clip>> => {
+    if (kind !== "ai") {
+      try {
+        const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), kind: kind === "video" ? "video" : "photo", pick });
+        return kind === "video" ? { video: d.url, image: null, credit: d.credit, pick, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, pick, status: "ready", note: "" };
+      } catch (e: any) {
+        try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: `${e?.message || "No real one found"}. An AI picture is used instead` }; }
+        catch { return { status: "error", note: "Nothing could be found or made for this clip. Try again" }; }
+      }
+    }
+    try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: "" }; }
+    catch { return { status: "error", note: "Picture couldn't be made. Try again from the clip" }; }
+  };
   const redoPicture = async (c: Clip) => {
-    upd(c.id, { status: "picture", note: "", video: null });
-    try { upd(c.id, { image: await makePicture(c.image_prompt, "9:16"), status: "ready" }); }
-    catch { upd(c.id, { status: "error", note: "Picture couldn't be made. Try again" }); }
+    upd(c.id, { status: "picture", note: "" });
+    upd(c.id, await getVisual(c, visuals, c.pick + 1));
   };
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
   const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace] };
   const usable = clips.filter(c => c.video || c.image);
+  const visualCredits = [...new Set(clips.filter(c => c.credit).map(c => c.credit.replace(/^(Photo|Video): /, "")))];
+  const creditLine = [visualCredits.length ? `${clips.some(c => c.credit.startsWith("Video")) ? "Footage" : "Photos"}: ${visualCredits.join(", ")}` : "", opt.music && musicCredit ? musicCredit : ""].filter(Boolean).join(" · ");
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
 
   return (
@@ -117,6 +138,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               </div></div>
             <div className="flex gap-6 flex-wrap">
               <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45, 60].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
+              <div><Label t={t}>Pictures</Label><Chips t={t} value={visuals} options={[{ v: "photo", l: "Real photos" }, { v: "video", l: "Real video clips" }, { v: "ai", l: "AI-made" }]} onChange={setVisuals} /></div>
               <div><Label t={t}>Clips</Label><Chips t={t} value={source} options={[{ v: "new", l: "New clips from the brief" }, { v: "board", l: `Storyboard clips${boardReady.length ? ` · ${boardReady.length}` : ""}` }]} onChange={setSource} /></div>
             </div>
           </div>
@@ -167,7 +189,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                       <div className="flex items-center gap-1">
                         <IconBtn t={t} title="Earlier" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={13} /></IconBtn>
                         <IconBtn t={t} title="Later" onClick={() => move(i, 1)} disabled={i === clips.length - 1}><ArrowDown size={13} /></IconBtn>
-                        <IconBtn t={t} title="New picture" onClick={() => redoPicture(c)} disabled={c.status === "picture" || c.status === "video" || source === "board"}><ImageIcon size={13} /></IconBtn>
+                        <IconBtn t={t} title={visuals === "ai" ? "New picture" : "A different one"} onClick={() => redoPicture(c)} disabled={c.status === "picture" || c.status === "video" || source === "board"}><ImageIcon size={13} /></IconBtn>
                         <IconBtn t={t} title="Remove" onClick={() => setClips(l => l.filter(x => x.id !== c.id))}><X size={13} /></IconBtn>
                       </div>
                     </div>
@@ -178,26 +200,23 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                       </select>
                     </div>
                     {c.note && <div style={{ fontSize: 12, color: c.status === "error" ? t.RED : t.MUTED }}>{c.note}</div>}
+                    {c.credit && <div style={{ fontSize: 11.5, color: t.FAINT }}>{c.credit}</div>}
                   </div>
                 </div>))}
               {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">
                 <input value={plan?.end_line || ""} onChange={e => setPlan(p => p && { ...p, end_line: e.target.value })} placeholder="Closing line" style={field(t)} />
                 <input value={endSub} onChange={e => setEndSub(e.target.value)} placeholder="Website or phone, e.g. +91 98200 00000" style={field(t)} /></div></Row>}
-              {opt.music && <Row t={t} label="Music"><div className="flex flex-col gap-2 w-full">
-                <label className="flex items-center gap-3" style={{ cursor: "pointer", fontSize: 13 }}>
-                  <span style={{ ...field(t), display: "inline-flex", alignItems: "center", gap: 8, width: "auto", color: t.TEAL, fontWeight: 600 }}><Music size={14} />{music ? "Change track" : "Choose a track"}</span>
-                  <span style={{ color: t.MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{music?.name || (plan?.music_mood ? `Suggested: ${plan.music_mood}` : "MP3 or M4A")}</span>
-                  <input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => setMusic(e.target.files?.[0] || null)} /></label>
-                <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
-                <Muted>Use music you own or have a licence for. Instagram can also add music when you post.</Muted></div></Row>}
+              {opt.music && <Row t={t} label="Music"><MusicPicker t={t} query={plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
+                onPick={(f, credit) => { setMusic(f); setMusicCredit(credit); }} volume={volume} setVolume={setVolume} /></Row>}
             </Card>
 
             {plan && (plan.caption || plan.hashtags.length > 0) && (
               <Card pad="18px 20px">
                 <div className="flex items-center justify-between gap-3"><b style={{ fontSize: 15 }}>Instagram caption</b>
-                  <Btn onClick={() => { navigator.clipboard.writeText(`${plan.caption}\n\n${plan.hashtags.join(" ")}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ height: 32 }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</Btn></div>
+                  <Btn onClick={() => { navigator.clipboard.writeText(`${plan.caption}\n\n${plan.hashtags.join(" ")}${creditLine ? `\n\n${creditLine}` : ""}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ height: 32 }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</Btn></div>
                 <textarea value={plan.caption} onChange={e => setPlan(p => p && { ...p, caption: e.target.value })} rows={4} style={{ ...field(t), height: "auto", padding: "10px 12px", marginTop: 10, lineHeight: 1.55, resize: "vertical", fontFamily: "inherit" }} />
                 <div style={{ marginTop: 8, fontSize: 12.5, color: t.TEAL, lineHeight: 1.6 }}>{plan.hashtags.join(" ")}</div>
+                {creditLine && <div style={{ marginTop: 8, fontSize: 12, color: t.MUTED, lineHeight: 1.5 }}>{creditLine}<div style={{ color: t.FAINT, marginTop: 2 }}>Credits are added when you copy. Creative Commons music needs this credit when you post.</div></div>}
               </Card>)}
           </div>
 
@@ -213,6 +232,64 @@ const field = (t: T): CSSProperties => ({ height: 36, borderRadius: 10, boxShado
 function Row({ t, label, children }: { t: T; label: string; children: ReactNode }) {
   return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 54, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
 }
+/** Free Creative Commons music (CC0 / CC BY, fine for business use), or your own track. */
+function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, setVolume }: { t: T; query: string; mood: string; seconds: number; music: File | null; credit: string; onPick: (f: File | null, credit: string) => void; volume: number; setVolume: (v: number) => void }) {
+  const [q, setQ] = useState(query);
+  const [tracks, setTracks] = useState<Track[] | null>(null);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const [playing, setPlaying] = useState<string | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => { setQ(query); }, [query]);
+  const search = async (term = q) => {
+    setBusy("search"); setErr("");
+    try { const r = await fetch(`${API_ROOT}/reel/music?q=${encodeURIComponent(term)}&seconds=${seconds}`); const d = await r.json(); if (!r.ok) throw new Error(d.detail); setTracks(d.tracks || []); }
+    catch (e: any) { setErr(e?.message || "The music library didn't answer"); setTracks([]); }
+    finally { setBusy(""); }
+  };
+  useEffect(() => { search(query); return () => audio.current?.pause(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const listen = (tr: Track) => {
+    if (playing === tr.id) { audio.current?.pause(); setPlaying(null); return; }
+    audio.current?.pause(); audio.current = new Audio(tr.url); audio.current.volume = 0.7; audio.current.play().catch(() => {}); setPlaying(tr.id);
+  };
+  const use = async (tr: Track) => {
+    setBusy(tr.id); setErr(""); audio.current?.pause(); setPlaying(null);
+    try {
+      const d = await post("/reel/music/use", { url: tr.url });
+      const blob = await (await fetch(d.url)).blob();
+      onPick(new File([blob], `${tr.title}.mp3`, { type: "audio/mpeg" }), tr.credit);
+    } catch (e: any) { setErr(e?.message || "The track couldn't be loaded"); }
+    finally { setBusy(""); }
+  };
+  const mm = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  return (
+    <div className="flex flex-col gap-2 w-full">
+      {music && <div style={{ fontSize: 12.5 }}>Using: <b style={{ fontWeight: 600 }}>{music.name.replace(/\.mp3$/, "")}</b>{credit && <span style={{ color: t.FAINT }}> · {credit.replace(/^Music: /, "")}</span>}
+        <button onClick={() => onPick(null, "")} style={{ marginLeft: 8, background: "none", border: "none", color: t.TEAL, fontWeight: 600, cursor: "pointer", fontSize: 12.5 }}>Remove</button></div>}
+      <div className="flex gap-2">
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} placeholder="Mood, e.g. calm piano" style={{ ...field(t), flex: 1 }} />
+        <Btn onClick={() => search()} disabled={busy === "search"} style={{ height: 36 }}>{busy === "search" ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}Find music</Btn>
+      </div>
+      {mood && <Muted>Suggested mood: {mood}</Muted>}
+      <div style={{ maxHeight: 230, overflowY: "auto" }}>
+        {tracks?.map(tr => (
+          <div key={tr.id} className="flex items-center gap-2" style={{ padding: "7px 0", borderTop: `1px solid ${t.LINE}`, fontSize: 12.5 }}>
+            <IconBtn t={t} title={playing === tr.id ? "Stop listening" : "Listen"} onClick={() => listen(tr)}>{playing === tr.id ? <Pause size={12} /> : <Play size={12} />}</IconBtn>
+            <div className="flex-1 min-w-0"><div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr.title}</div>
+              <div style={{ color: t.FAINT, fontSize: 11.5 }}>{tr.creator} · {mm(tr.seconds)} · {tr.license}{tr.seconds < seconds ? " · shorter than the reel" : ""}</div></div>
+            <Btn onClick={() => use(tr)} disabled={!!busy} style={{ height: 30 }}>{busy === tr.id ? <Loader2 size={13} className="animate-spin" /> : null}Use</Btn>
+          </div>))}
+        {tracks && !tracks.length && !busy && <Muted>No tracks found. Try another mood, like piano, ambient or acoustic.</Muted>}
+      </div>
+      <ErrorNote t={t} text={err} />
+      <label className="flex items-center gap-3" style={{ cursor: "pointer", fontSize: 12.5, color: t.TEAL, fontWeight: 600 }}>
+        <Upload size={13} />Or upload your own track<input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f, ""); }} /></label>
+      <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
+      <Muted>Free Creative Commons music (CC0 and CC BY, fine for business use) from Jamendo via Openverse.</Muted>
+    </div>
+  );
+}
+
 function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
   return <div className="flex items-center gap-1.5"><span style={{ fontSize: 12, color: t.FAINT, marginRight: 2 }}>{label}</span>
     {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} aria-pressed={value === v} style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,

@@ -183,6 +183,7 @@ Return ONLY a valid JSON object. No markdown, no explanation.
     {{
       "image_prompt": "photographic description of the shot: exact real place names, time of day, light, lens, colours. NO people, NO faces, NO text in the image",
       "video_prompt": "Animate: subtle natural motion only, 1-2 sentences",
+      "photo_query": "2-5 word search to find a REAL stock photo or video of this shot, e.g. 'Fushimi Inari torii' or 'Maldives overwater villa'",
       "on_screen_text": "the words on this clip (max 8). For labels use 'Label · Main', e.g. 'Day 2 · Hakone' or '3 · Uluwatu at sunset'",
       "seconds": 3.0
     }}
@@ -191,7 +192,8 @@ Return ONLY a valid JSON object. No markdown, no explanation.
   "end_sub": "a second end-card line ONLY if the request gives a price, date or contact; otherwise empty",
   "caption": "Instagram caption, 2-4 short lines, warm and refined, one call to action to message us",
   "hashtags": ["#luxurytravel", "..."],
-  "music_mood": "e.g. calm piano, upbeat acoustic"
+  "music_mood": "e.g. calm piano, upbeat acoustic",
+  "music_query": "1-2 plain words to search a music library, e.g. 'piano', 'ambient', 'acoustic', 'electronic'"
 }}
 
 Rules:
@@ -220,6 +222,7 @@ Rules:
             "image_prompt": str(s["image_prompt"]).strip(),
             "video_prompt": str(s.get("video_prompt") or "Animate: very slow camera push forward.").strip(),
             "on_screen_text": str(s.get("on_screen_text") or "").strip(),
+            "photo_query": str(s.get("photo_query") or "").strip(),
             "seconds": max(1.0, min(sec, 8.0)),
         })
     if not clean:
@@ -240,4 +243,5 @@ Rules:
         "caption": str(plan.get("caption") or "").strip(),
         "hashtags": [("#" + str(t).lstrip("#")).strip() for t in tags if str(t).strip()][:20],
         "music_mood": str(plan.get("music_mood") or "").strip(),
+        "music_query": str(plan.get("music_query") or "").strip(),
     }

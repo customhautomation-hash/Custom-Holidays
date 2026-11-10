@@ -182,7 +182,7 @@ export const STAFF: HelpSection[] = [
       { label: "Video from text", text: "Describe a scene and pick the shape and length. Videos take 3 to 8 minutes." },
       { label: "Video from a picture", text: "Choose a photo, say how it should move, and click Bring it to life. The photo stays as it is; only gentle movement is added." },
       { label: "Storyboard", text: "Type a destination. A short film plan is written scene by scene with a picture for each. Make each clip into a video, or click Make all videos." },
-      { label: "Reel", text: "Describe any kind of reel in your own words: a slow destination film, a numbered top 5, a day-by-day itinerary, an offer with your price, travel tips, a fast trend reel or anything else. It works out the kind of reel and plans it. Need an idea fills in a sample. After planning you can change the text position, font, size and pace under Look. Pick a length. It plans the clips, makes a picture for each (or moving clips when the video studio is on) and adds the text. Switch the opening title, text on each clip, logo, end card and music on or off, edit any text, reorder clips, then Download reel. It saves as MP4 in Chrome or Edge; keep the tab open while it saves. An Instagram caption and hashtags are written for you to copy." },
+      { label: "Reel", text: "Describe any kind of reel in your own words: a slow destination film, a numbered top 5, a day-by-day itinerary, an offer with your price, travel tips, a fast trend reel or anything else. It works out the kind of reel and plans it. Need an idea fills in a sample. After planning you can change the text position, font, size and pace under Look. Pictures can be real photos, real video clips (from Pexels) or AI-made; use the swap button on a clip for a different one. Music: Find music suggests free Creative Commons tracks to listen to and use, or upload your own. Credits for photos and music are added when you copy the caption. Pick a length. It plans the clips, makes a picture for each (or moving clips when the video studio is on) and adds the text. Switch the opening title, text on each clip, logo, end card and music on or off, edit any text, reorder clips, then Download reel. It saves as MP4 in Chrome or Edge; keep the tab open while it saves. An Instagram caption and hashtags are written for you to copy." },
     ],
     tips: ["Pictures and videos are kept for 3 days, so download the ones you want to keep.", "If the bar says the video studio is offline, the main PC is off or ComfyUI isn't running. Pictures still work."],
   },
@@ -305,7 +305,7 @@ export const COMPANY: HelpSection[] = [
     intro: "The keys that connect the services live in two places. Never paste them into chat, email or the code.",
     points: [
       { label: "Vercel → Settings → Environment Variables", text: "VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_URL, VITE_GOOGLE_CLIENT_ID." },
-      { label: "Render → Environment", text: "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REDIRECT_URI, OPENROUTER_API_KEY, GEMINI_API_KEY, FRONTEND_URL and the other AI keys." },
+      { label: "Render → Environment", text: "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REDIRECT_URI, OPENROUTER_API_KEY, GEMINI_API_KEY, PEXELS_API_KEY, COMFY_URL, COMFY_KEY, FRONTEND_URL and the other AI keys." },
     ],
     tips: [
       "The Supabase service role key gives full access to the database. It belongs only in Render, never in Vercel.",
@@ -348,6 +348,7 @@ export const COMPANY: HelpSection[] = [
     points: [
       { label: "Team Chat, Vouchers, Desktop alerts", text: "Run three files in Supabase → SQL Editor: supabase/team_chat.sql, supabase/vouchers.sql and supabase/push_notifications.sql. Then deploy the push-notify function with JWT verification turned off." },
       { label: "Gmail and Drive for everyone", text: "In Google Cloud (project 'automation'): finish Branding, add the Gmail and Drive scopes, click Publish app, and put the client ID and secret into Render and Vercel." },
+      { label: "Real photos and video clips in reels", text: "Create a free account at pexels.com/api, copy the API key and add it on Render as PEXELS_API_KEY. Without it, real photos come from Openverse (fewer and slower) and real video clips are off." },
       { label: "Videos on the Creatives page", text: "Connect the main PC that runs ComfyUI. See Video studio on the main PC above." },
       { label: "Finance figures from Tally", text: "Run supabase/finance_tally.sql in Supabase → SQL Editor. Then open Finance KPIs, click Download Tally Connector and follow the steps on the computer that has Tally." },
       { label: "Gmail checked every 5 minutes", text: "Run supabase/gmail_auto_check.sql in Supabase → SQL Editor. Until then, Gmail is only checked while someone has the Suppliers page open." },

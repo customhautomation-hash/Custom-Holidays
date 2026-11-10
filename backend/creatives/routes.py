@@ -423,6 +423,46 @@ def reel_plan(req: ReelPlanRequest):
         raise HTTPException(status_code=502, detail=str(e) if "reel" in str(e).lower() else "The reel couldn't be planned just now. Please try again in a minute")
 
 
+class StockRequest(BaseModel):
+    query: str
+    kind: str = "photo"
+    pick: int = 0
+
+
+@router.post("/reel/stock")
+def reel_stock(req: StockRequest):
+    """A real photo or video clip for a reel scene (Pexels, or Openverse for photos without a key)."""
+    from creatives.stock import find_stock
+    try:
+        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick)}
+    except Exception as e:
+        raise HTTPException(status_code=404 if "found" in str(e) else 502, detail=str(e))
+
+
+@router.get("/reel/music")
+def reel_music(q: str = "calm cinematic", seconds: int = 30):
+    """Free Creative Commons music for a mood (CC0 / CC BY)."""
+    from creatives.stock import find_music
+    try:
+        return {"success": True, "tracks": find_music(q, seconds)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="The music library didn't answer. Try again in a minute")
+
+
+class MusicFetchRequest(BaseModel):
+    url: str
+
+
+@router.post("/reel/music/use")
+def reel_music_use(req: MusicFetchRequest):
+    """Copies a chosen track to our storage so the reel can be recorded with it."""
+    from creatives.stock import fetch_music
+    try:
+        return {"success": True, "url": fetch_music(req.url)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e) or "The track couldn't be loaded")
+
+
 @router.post("/stop-generation")
 async def stop_generation(payload: StopGenerationRequest):
     stopped_job = False

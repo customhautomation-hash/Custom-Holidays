@@ -42,7 +42,7 @@ def delete_old_files():
     except Exception:
         return
     cutoff = datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)
-    for bucket in ("generated-images", "videos"):
+    for bucket in ("generated-images", "videos", "stock", "music"):
         try:
             files = supabase.storage.from_(bucket).list(options={"limit": 1000}) or []
             old = []
