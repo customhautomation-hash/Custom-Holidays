@@ -13,6 +13,24 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 
+_ready_buckets: set = set()
+
+
+def ensure_bucket(name: str) -> None:
+    """Make the public storage folder (bucket) for generated pictures or videos if it doesn't exist yet."""
+    if name in _ready_buckets:
+        return
+    from supabase_client import supabase
+    try:
+        existing = {getattr(b, "name", None) or (b.get("name") if isinstance(b, dict) else None) for b in supabase.storage.list_buckets()}
+        if name not in existing:
+            supabase.storage.create_bucket(name, options={"public": True})
+            print(f"Created storage bucket {name}")
+        _ready_buckets.add(name)
+    except Exception as e:
+        print(f"Could not check or create bucket {name}: {e}")
+
+
 KEEP_DAYS = 3   # pictures and videos made on the Creatives page are kept this long, then removed to save space
 
 
@@ -100,6 +118,7 @@ def generate_image(image_prompt: str, ratio: str = "1:1") -> str:
     image_bytes = base64.b64decode(image_b64)
     image_bytes = _crop_to_ratio(image_bytes, ratio)
 
+    ensure_bucket("generated-images")
     filename = f"{uuid.uuid4()}.jpg"
     upload_url = f"{SUPABASE_URL}/storage/v1/object/generated-images/{filename}"
 

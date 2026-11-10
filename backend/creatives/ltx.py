@@ -63,6 +63,8 @@ def _upload_video_to_supabase(local_path: str, new_filename: str) -> str:
     from supabase_client import supabase
 
     bucket = "videos"
+    from creatives.flux import ensure_bucket
+    ensure_bucket(bucket)
 
     with open(local_path, "rb") as f:
         upload_response = supabase.storage.from_(bucket).upload(

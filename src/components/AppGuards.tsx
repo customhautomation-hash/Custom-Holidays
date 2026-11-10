@@ -4,9 +4,12 @@
  *   message with a "Try again" button. The sidebar, header and every other page keep working.
  * - WakeNote: small note shown while the backend server is waking up.
  */
-import { Component, ErrorInfo, ReactNode, useEffect, useState } from "react";
+import { Component, ErrorInfo, ReactNode, createContext, useEffect, useState } from "react";
 import { onServerWake } from "@/lib/serverWake";
 import { useDarkMode } from "@/hooks/useDarkMode";
+
+/** True for the page on screen. Pages kept open in the background get false. */
+export const PageVisible = createContext(true);
 
 type GuardProps = { children: ReactNode; resetKey?: string; compact?: boolean };
 type GuardState = { failed: boolean };

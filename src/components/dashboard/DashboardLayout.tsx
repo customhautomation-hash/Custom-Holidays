@@ -1,6 +1,7 @@
 import { SidebarTrigger } from "../../components/ui/sidebar";
 import { RefreshCw, Moon, Sun, HelpCircle } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useContext } from "react";
+import { PageVisible } from "../AppGuards";
 import { useAuth } from "../../hooks/useAuth";
 import { useDarkMode } from "../../hooks/useDarkMode";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -26,6 +27,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Pages stay open in the background so work isn't lost; only the page on screen runs search and notifications
+  const visible = useContext(PageVisible);
   // The ? button opens the Help section for the page you're on
   const helpTopic = (STAFF.find(s => s.route && s.route !== "/" && pathname.startsWith(s.route)) || (pathname === "/" ? STAFF.find(s => s.route === "/") : undefined))?.id;
 
@@ -72,7 +75,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <SidebarTrigger className="rounded-xl transition-all" style={btnStyle} />
 
           {/* Global Search — sits left of centre */}
-          <GlobalSearch />
+          {visible && <GlobalSearch />}
         </div>
 
         <div className="flex items-center gap-3">
@@ -97,7 +100,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </button>
 
           {/* Notifications */}
-          <NotificationsBell btnStyle={btnStyle} />
+          {visible && <NotificationsBell btnStyle={btnStyle} />}
 
           {/* Avatar → /profile */}
           <div

@@ -34,7 +34,7 @@ import PriceCompare     from "./pages/PriceCompare";
 import { AssistantPopup } from "@/components/dashboard/AssistantPopup";
 import { refreshPush } from "@/lib/push";
 import { installServerWake, warmUpServer } from "@/lib/serverWake";
-import { PageGuard, WakeNote } from "@/components/AppGuards";
+import { PageGuard, WakeNote, PageVisible } from "@/components/AppGuards";
 import Help             from "./pages/Help";
 import ResetPassword    from "./pages/ResetPassword";
 import { supabase } from "@/lib/supabase";
@@ -43,9 +43,34 @@ import { supabase } from "@/lib/supabase";
 const cameFromResetLink = typeof window !== "undefined" && /type=recovery/.test(window.location.hash + window.location.search);
 
 installServerWake();
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const queryClient = new QueryClient();
+
+/**
+ * Pages that stay open once visited, so switching pages never loses work in progress
+ * (a half-made voucher, a reel being made, search filters, scroll position...).
+ * Team Chat, Profile, Help and the import pages reload fresh each time.
+ */
+const KEPT: Record<string, () => JSX.Element> = {
+  "/": () => <Index />, "/leads": () => <MasterCRM />, "/web-analytics": () => <WebAnalytics />, "/meta-analytics": () => <MetaAnalytics />,
+  "/itineraries": () => <Itineraries />, "/price-compare": () => <PriceCompare />, "/quotes": () => <QuoteGenerator />, "/vouchers": () => <VoucherGenerator />,
+  "/automations": () => <Automations />, "/trips": () => <ActiveTrips />, "/suppliers": () => <Suppliers />, "/active-deals": () => <ActiveDeals />,
+  "/campaign-design": () => <CampaignDesign />, "/content": () => <Content />, "/creatives": () => <Creatives />, "/finance-kpis": () => <FinanceKPIs />,
+};
+
+function KeptPages({ path }: { path: string }) {
+  const active = path in KEPT ? path : null;
+  const [seen, setSeen] = useState<string[]>([]);
+  useEffect(() => { if (active && !seen.includes(active)) setSeen(s => [...s, active]); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = active && !seen.includes(active) ? [...seen, active] : seen;
+  return <>{list.map(p => (
+    <PageVisible.Provider key={p} value={p === active}>
+      <div style={{ display: p === active ? "contents" : "none" }}>
+        <PageGuard resetKey={p}>{KEPT[p]()}</PageGuard>
+      </div>
+    </PageVisible.Provider>))}</>;
+}
 
 function AppRoutes() {
   const { session, loading } = useAuth();
@@ -90,28 +115,14 @@ function AppRoutes() {
       <div className="flex min-h-screen w-full" style={{ background: "var(--neu-base, #F3EAEA)" }}>
         <DashboardSidebar />
         <WakeNote />
+        <KeptPages path={location.pathname} />
         <PageGuard resetKey={location.pathname}>
         <Routes>
-          <Route path="/"                  element={<Index />} />
+          {Object.keys(KEPT).map(p => <Route key={p} path={p} element={null} />)}
           <Route path="/login"             element={<Navigate to="/" replace />} />
-          <Route path="/leads"             element={<MasterCRM />} />
           <Route path="/leads/import"      element={<LeadTools />} />
-          <Route path="/web-analytics"     element={<WebAnalytics />} />
-          <Route path="/meta-analytics"    element={<MetaAnalytics />} />
-          <Route path="/itineraries"       element={<Itineraries />} />
-          <Route path="/price-compare"     element={<PriceCompare />} />
-          <Route path="/quotes"            element={<QuoteGenerator />} />
-          <Route path="/vouchers"          element={<VoucherGenerator />} />
           <Route path="/chat"              element={<Chat />} />
-          <Route path="/automations"       element={<Automations />} />
-          <Route path="/trips"             element={<ActiveTrips />} />
-          <Route path="/suppliers"         element={<Suppliers />} />
           <Route path="/suppliers/import"  element={<SupplierTools />} />
-          <Route path="/active-deals"      element={<ActiveDeals />} />
-          <Route path="/campaign-design"   element={<CampaignDesign />} />
-          <Route path="/content"           element={<Content />} />
-          <Route path="/creatives"         element={<Creatives />} />
-          <Route path="/finance-kpis"      element={<FinanceKPIs />} />
           <Route path="/profile"           element={<Profile />} />
           <Route path="/help"              element={<Help />} />
           <Route path="/privacy"           element={<Privacy />} />
