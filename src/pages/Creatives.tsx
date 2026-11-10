@@ -68,7 +68,16 @@ export default function Creatives() {
   const [studio, setStudio] = useState<Studio | null>(null);
   const [handoff, setHandoff] = useState<{ path: string; prompt: string } | null>(null);
 
-  const check = async () => { try { setStudio(await fetch(`${API_ROOT}/creatives/status`).then(r => r.json())); } catch { setStudio(null); } };
+  // Only trust a proper answer: an older server (or one still waking up) answers differently
+  const check = async () => {
+    try {
+      const r = await fetch(`${API_ROOT}/creatives/status`);
+      const d = r.ok ? await r.json() : null;
+      setStudio(d && typeof d === "object" && d.video && typeof d.video === "object"
+        ? { images: d.images !== false, prompts: d.prompts !== false, video: { online: !!d.video.online, reason: d.video.reason, gpu: d.video.gpu, queue: d.video.queue } }
+        : { images: true, prompts: true, video: { online: false, reason: r.status === 404 ? "not_set_up" : "offline" } });
+    } catch { setStudio(null); }
+  };
   useEffect(() => { check(); const i = setInterval(check, 30000); return () => clearInterval(i); }, []);
   const videoOn = !!studio?.video.online;
   const owner = /^(owner|admin)$/i.test(profile?.role || "");
