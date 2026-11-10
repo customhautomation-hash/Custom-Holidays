@@ -12,8 +12,8 @@
  * instant switch.
  */
 
-const DURATION = 1500;   // ms
-const FRAMES = 45;
+const DURATION = 1600;   // ms
+const FRAMES = 48;      // 30 frames a second
 
 // ── Small, fast value noise ───────────────────────────────────────────────
 function makeNoise(seed: number) {
@@ -37,26 +37,35 @@ function makeNoise(seed: number) {
   };
 }
 
-/** The arrival-time map: 0 = the ink is there at once, 1 = the ink gets there last. */
+/**
+ * The arrival-time map: 0 = the ink is there at once, 1 = the ink gets there last.
+ * Like a drop of ink spreading on wet paper: a growing blot from the button whose edge is
+ *  • feathered into fine streaks that point outwards (noise stretched along the direction of travel),
+ *  • gently bent into swirls (domain-warped noise, like marbling),
+ *  • with a few thin threads of the old colour left behind that close up last.
+ * The bends are kept small, so the ink always spreads as one connected front (no stray blobs ahead of it).
+ */
 function arrivalMap(w: number, h: number, ox: number, oy: number) {
   const fbm = makeNoise(1 + Math.floor(Math.random() * 1e6));
   const T = new Float32Array(w * h);
   const aspect = w / h;
-  const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([cx, cy]) => Math.hypot((cx - ox) * aspect, cy - oy));
-  const far = Math.max(...corners);
+  const far = Math.max(...[[0, 0], [1, 0], [0, 1], [1, 1]].map(([cx, cy]) => Math.hypot((cx - ox) * aspect, cy - oy)));
   let lo = Infinity, hi = -Infinity;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const u = x / w, v = y / h;
-      const px = u * aspect * 1.6, py = v * 1.6;
-      // Marbling: noise pushed around by noise pushed around by noise (Inigo Quilez's domain warping),
-      // which stretches it into long swirls; ridges of it become thin ink filaments
+      const dx = (u - ox) * aspect, dy = v - oy;
+      const r = Math.hypot(dx, dy) / far;                       // 0 at the button, 1 at the farthest corner
+      const ang = Math.atan2(dy, dx);
+      const px = u * aspect * 1.4, py = v * 1.4;
+      // marbling swirl
       const qx = fbm(px + 1.7, py + 9.2, 3), qy = fbm(px + 8.3, py + 2.8, 3);
-      const rx = fbm(px + 4 * qx + 1.7, py + 4 * qy + 9.2, 3), ry = fbm(px + 4 * qx + 8.3, py + 4 * qy + 2.8, 3);
-      const warp = fbm(px + 4 * rx, py + 4 * ry, 4);
-      const ridge = Math.pow(1 - Math.abs(2 * fbm(px * 3 + 7 * rx, py * 3 + 7 * ry, 3) - 1), 4);
-      const d = Math.hypot((u - ox) * aspect, v - oy) / far;
-      const t = d * 0.85 + (warp - 0.5) * 0.62 - ridge * 0.15;
+      const swirl = fbm(px + 2.5 * qx, py + 2.5 * qy, 4);
+      // feathered streaks: fine across the direction of travel, long along it
+      const streak = fbm(ang * 22 + 5 * qx, r * 3 + 2.5 * qy, 4);
+      // thin threads of the old colour, left behind and closing last
+      const thread = Math.pow(1 - Math.abs(2 * fbm(px * 2.6 + 6 * qx, py * 2.6 + 6 * qy, 3) - 1), 8);
+      const t = r + (swirl - 0.5) * 0.24 + (streak - 0.5) * (0.06 + 0.15 * Math.min(1, r * 2)) + thread * 0.1;
       T[y * w + x] = t;
       if (t < lo) lo = t; if (t > hi) hi = t;
     }
@@ -65,19 +74,21 @@ function arrivalMap(w: number, h: number, ox: number, oy: number) {
   return T;
 }
 
-const easeInOut = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+// Starts at once (a drop landing), sweeps steadily, then settles gently as the last threads close
+const easeInOut = (x: number) => 1 - Math.pow(1 - x, 1.6);
 
 /**
- * Makes all the mask frames as ONE tall image (a sprite sheet), small and then stretched to the screen.
+ * Makes all the mask frames as ONE tall image (a sprite sheet), then stretched to the screen.
  * The animation steps through it by moving it, so no new image has to load mid-animation (no flicker).
  */
-async function maskSprite(ox: number, oy: number): Promise<{ url: string; img: HTMLImageElement }> {
-  const w = 420, h = Math.max(120, Math.round(420 * window.innerHeight / Math.max(1, window.innerWidth)));
+type Sprite = { url: string; img: HTMLImageElement; key: string };
+async function maskSprite(ox: number, oy: number): Promise<Sprite> {
+  const w = 640, h = Math.max(160, Math.round(640 * window.innerHeight / Math.max(1, window.innerWidth)));
   const T = arrivalMap(w, h, ox, oy);
   const c = document.createElement("canvas"); c.width = w; c.height = h * (FRAMES + 1);
   const ctx = c.getContext("2d")!;
   const img = ctx.createImageData(w, h);
-  const edge = 0.014;
+  const edge = 0.006;                                   // a crisp, slightly soft ink edge
   for (let k = 0; k <= FRAMES; k++) {
     const th = easeInOut(k / FRAMES) * (1 + 2 * edge) - edge;
     for (let i = 0, j = 0; i < T.length; i++, j += 4) {
@@ -91,7 +102,27 @@ async function maskSprite(ox: number, oy: number): Promise<{ url: string; img: H
   const url = URL.createObjectURL(blob);
   const im = new Image(); im.src = url;
   await im.decode();
-  return { url, img: im };
+  return { url, img: im, key: keyOf(ox, oy) };
+}
+const keyOf = (ox: number, oy: number) => `${Math.round(ox * 20)}:${Math.round(oy * 20)}:${window.innerWidth}x${window.innerHeight}`;
+
+// One ink pattern is made ahead of time (when the pointer comes near the button), so the click is instant
+let ready: Promise<Sprite> | null = null;
+let readyKey = "";
+function prepare(ox: number, oy: number) {
+  const key = keyOf(ox, oy);
+  if (ready && readyKey === key) return ready;
+  readyKey = key;
+  ready = maskSprite(ox, oy);
+  ready.catch(() => { ready = null; readyKey = ""; });
+  return ready;
+}
+
+/** Call when the pointer comes over the theme button: makes the ink pattern ahead of time. */
+export function warmInk(el?: Element | null) {
+  if (!(document as any).startViewTransition || !el) return;
+  const b = el.getBoundingClientRect();
+  prepare((b.left + b.width / 2) / window.innerWidth, (b.top + b.height / 2) / window.innerHeight);
 }
 
 let running = false;
@@ -106,9 +137,10 @@ export async function inkSwitch(apply: () => void, from?: { x: number; y: number
   if (running || reduce || !doc.startViewTransition) { apply(); return; }
   running = true;
   const x = from?.x ?? window.innerWidth - 60, y = from?.y ?? 40;
-  let sprite: { url: string; img: HTMLImageElement };
-  try { sprite = await maskSprite(x / window.innerWidth, y / window.innerHeight); }
+  let sprite: Sprite;
+  try { sprite = await prepare(x / window.innerWidth, y / window.innerHeight); }
   catch { running = false; apply(); return; }
+  ready = null; readyKey = "";                          // a fresh pattern next time
 
   const root = document.documentElement;
   root.style.setProperty("--ink-mask", `url(${sprite.url})`);
@@ -119,6 +151,7 @@ export async function inkSwitch(apply: () => void, from?: { x: number; y: number
     root.style.removeProperty("--ink-mask"); root.style.removeProperty("--ink-size");
     setTimeout(() => URL.revokeObjectURL(sprite.url), 200);
     running = false;
+    setTimeout(() => prepare(x / window.innerWidth, y / window.innerHeight), 400);   // and get the next one ready
   };
   try {
     const vt = doc.startViewTransition(() => apply());
