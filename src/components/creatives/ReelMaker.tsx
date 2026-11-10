@@ -7,7 +7,7 @@
  */
 import { CSSProperties, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PageVisible } from "@/components/AppGuards";
-import { Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
+import { Maximize2, Minimize2, Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
@@ -594,10 +594,38 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
     finally { setProgress(null); }
   };
 
+  // Full screen: the reel fills the screen (black around it), click or Space to play/pause, Esc to leave
+  const frameBox = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const on = () => setFull(document.fullscreenElement === frameBox.current);
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    const key = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); toggle(); } };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggleFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else frameBox.current?.requestFullscreen?.().catch(() => {});
+  };
+  const ctrl: CSSProperties = { width: 40, height: 40, borderRadius: 99, border: "none", background: "rgba(0,0,0,.55)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
+
   return (
     <Card pad="18px" className="xl:sticky xl:top-4">
-      <div style={{ position: "relative", width: "100%", maxWidth: 340, margin: "0 auto", aspectRatio: `${W} / ${H}`, borderRadius: 16, overflow: "hidden", background: "#0C2C32", boxShadow: t.IN }}>
-        <canvas ref={canvas} width={W} height={H} style={{ width: "100%", height: "100%", display: "block" }} onClick={toggle} />
+      <div ref={frameBox} style={full
+        ? { position: "relative", width: "100vw", height: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }
+        : { position: "relative", width: "100%", maxWidth: 340, margin: "0 auto", aspectRatio: `${W} / ${H}`, borderRadius: 16, overflow: "hidden", background: "#0C2C32", boxShadow: t.IN }}>
+        <canvas ref={canvas} width={W} height={H} style={full ? { height: "100%", width: "auto", maxWidth: "100%", display: "block" } : { width: "100%", height: "100%", display: "block" }} onClick={toggle} />
+        {L && !full && <button onClick={toggleFull} title="Full screen" aria-label="Full screen" style={{ ...ctrl, position: "absolute", top: 10, right: 10, width: 34, height: 34 }}><Maximize2 size={15} /></button>}
+        {full && <div style={{ position: "absolute", left: 0, right: 0, bottom: 24, display: "flex", justifyContent: "center", gap: 12 }}>
+          <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} style={ctrl}>{playing ? <Pause size={17} /> : <Play size={17} />}</button>
+          <span style={{ ...ctrl, width: "auto", padding: "0 14px", fontSize: 13, fontVariantNumeric: "tabular-nums", cursor: "default" }}>{clock(time)} / {clock(total)}</span>
+          <button onClick={toggleFull} title="Leave full screen (Esc)" aria-label="Leave full screen" style={ctrl}><Minimize2 size={17} /></button>
+        </div>}
         {(loading || !L) && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#E6EFEC", fontSize: 13, gap: 8 }}>{clips.length ? <><Loader2 size={16} className="animate-spin" />{loadNote || "Loading the preview"}</> : "The preview appears when the first picture is ready"}</div>}
       </div>
       <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
