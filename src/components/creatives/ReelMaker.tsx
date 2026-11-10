@@ -12,7 +12,7 @@ import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
-import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
+import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
 type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals };
@@ -396,7 +396,11 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
     if (!L) return;
     player.current?.pause(); setPlaying(false); setErr(""); setProgress(0);
     try {
-      const { blob, ext } = await exportReel(L, look, music, volume, setProgress);
+      // Frame by frame where the browser can (smooth and complete); otherwise record in real time
+      let out: { blob: Blob; ext: string };
+      try { out = await exportReelFrames(L, look, music, volume, setProgress); }
+      catch (e: any) { if (e?.message !== "NO_WEBCODECS") console.warn("Frame export failed, recording instead:", e); setProgress(0); out = await exportReel(L, look, music, volume, setProgress); }
+      const { blob, ext } = out;
       downloadBlob(blob, `${name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "reel"}-reel.${ext}`);
     } catch (e: any) { setErr(e?.message?.includes("tainted") || e?.name === "SecurityError" ? "The browser blocked one of the clips. Try making that clip again" : e?.message || "The reel couldn't be saved"); }
     finally { setProgress(null); }
@@ -415,7 +419,7 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
       </div>
       <Btn kind="primary" onClick={doExport} disabled={!L || progress != null} style={{ width: "100%", marginTop: 14 }}>
         {progress != null ? <><Loader2 size={15} className="animate-spin" />Saving the reel · {Math.round(progress * 100)}%</> : <><Download size={15} />Download reel ({fmtInfo.ext.toUpperCase()})</>}</Btn>
-      <div style={{ marginTop: 8 }}><Muted>{progress != null ? "Keep this tab open and in front while it saves; it takes as long as the reel." : `1080 × 1920, ready for Instagram${fmtInfo.ext === "webm" ? ". This browser saves WebM; use Chrome or Edge for MP4" : ""}.`}</Muted></div>
+      <div style={{ marginTop: 8 }}><Muted>{progress != null ? "Saving every frame. Keep this tab open until it finishes." : `1080 × 1920, ready for Instagram${fmtInfo.ext === "webm" ? ". This browser saves WebM; use Chrome or Edge for MP4" : ""}.`}</Muted></div>
       <ErrorNote t={t} text={err} />
     </Card>
   );

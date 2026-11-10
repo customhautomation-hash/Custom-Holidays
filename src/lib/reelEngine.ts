@@ -224,3 +224,109 @@ export async function exportReel(L: Loaded, look: ReelLook, music: File | null, 
   audio?.pause(); audioCtx?.close();
   return { blob: new Blob(chunks, { type: mime.split(";")[0] }), ext };
 }
+
+/** Puts every video clip on the exact frame needed for time t (used by the frame-by-frame export). */
+async function seekVideos(L: Loaded, t: number, fade: number) {
+  let start = 0;
+  const waits: Promise<void>[] = [];
+  L.items.forEach(it => {
+    const s = start; start += it.seconds;
+    if (it.kind !== "video") return;
+    const v = it.el as HTMLVideoElement;
+    if (!v.paused) v.pause();
+    if (!(t >= s - 0.05 && t < start + fade)) return;
+    const lt = Math.max(0, Math.min(t - s, (v.duration || it.seconds) - 0.04));
+    if (Math.abs(v.currentTime - lt) < 0.001 && v.readyState >= 2) return;
+    waits.push(new Promise<void>(res => {
+      const done = () => { clearTimeout(timer); v.removeEventListener("seeked", done); res(); };
+      const timer = setTimeout(done, 3000);
+      v.addEventListener("seeked", done);
+      v.currentTime = lt;
+    }));
+  });
+  await Promise.all(waits);
+}
+
+/**
+ * Frame-by-frame export with WebCodecs: every one of the 30 frames per second is drawn and encoded,
+ * so the file is smooth and complete even on a slow computer or when the tab is in the background.
+ * Throws "NO_WEBCODECS" where the browser can't do this (then the real-time recorder is used).
+ */
+export async function exportReelFrames(L: Loaded, look: ReelLook, music: File | null, volume: number, onProgress: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
+  const w = window as any;
+  if (!w.VideoEncoder || !w.VideoFrame) throw new Error("NO_WEBCODECS");
+  const fps = 30;
+  let vcfg: any = null;
+  for (const codec of ["avc1.640034", "avc1.640028", "avc1.4d0034", "avc1.42003e"]) {
+    const cfg = { codec, width: W, height: H, bitrate: 10_000_000, framerate: fps };
+    try { if ((await w.VideoEncoder.isConfigSupported(cfg)).supported) { vcfg = cfg; break; } } catch { /* try the next */ }
+  }
+  if (!vcfg) throw new Error("NO_WEBCODECS");
+  const { Muxer, ArrayBufferTarget } = await import("mp4-muxer");
+  const total = totalOf(L.items, look);
+  const fade = look.fade ?? FADE;
+
+  // Music: mixed offline with the fade in and out, then encoded
+  let audioBuf: AudioBuffer | null = null, acfg: any = null;
+  const SR = 48000;
+  if (music && w.AudioEncoder) {
+    const ac = new AudioContext();
+    const decoded = await ac.decodeAudioData(await music.arrayBuffer());
+    ac.close();
+    const off = new OfflineAudioContext(2, Math.ceil(total * SR), SR);
+    const src = off.createBufferSource(); src.buffer = decoded;
+    const g = off.createGain();
+    g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(volume, Math.min(1, total / 3));
+    g.gain.setValueAtTime(volume, Math.max(1, total - 1.8)); g.gain.linearRampToValueAtTime(0, total);
+    src.connect(g); g.connect(off.destination); src.start(0);
+    audioBuf = await off.startRendering();
+    for (const codec of ["mp4a.40.2", "opus"]) {
+      const cfg = { codec, sampleRate: SR, numberOfChannels: 2, bitrate: 160_000 };
+      try { if ((await w.AudioEncoder.isConfigSupported(cfg)).supported) { acfg = cfg; break; } } catch { /* try the next */ }
+    }
+  }
+
+  const target = new ArrayBufferTarget();
+  const muxer = new Muxer({
+    target, fastStart: "in-memory", firstTimestampBehavior: "offset",
+    video: { codec: "avc", width: W, height: H, frameRate: fps },
+    ...(acfg ? { audio: { codec: acfg.codec === "opus" ? "opus" : "aac", numberOfChannels: 2, sampleRate: SR } } : {}),
+  });
+  let failure: any = null;
+  const venc = new w.VideoEncoder({ output: (c: any, m: any) => muxer.addVideoChunk(c, m), error: (e: any) => (failure = e) });
+  venc.configure(vcfg);
+
+  const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  const frames = Math.ceil(total * fps);
+  for (let f = 0; f < frames; f++) {
+    const t = f / fps;
+    await seekVideos(L, t, fade);
+    drawAt(ctx, t, L, look);
+    const frame = new w.VideoFrame(canvas, { timestamp: Math.round(t * 1e6), duration: Math.round(1e6 / fps) });
+    venc.encode(frame, { keyFrame: f % (fps * 2) === 0 });
+    frame.close();
+    while (venc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 5));
+    if (failure) throw failure;
+    if (f % 6 === 0) { onProgress((f / frames) * (audioBuf ? 0.92 : 1)); await new Promise(r => setTimeout(r, 0)); }
+  }
+  await venc.flush();
+
+  if (audioBuf && acfg) {
+    const aenc = new w.AudioEncoder({ output: (c: any, m: any) => muxer.addAudioChunk(c, m), error: (e: any) => (failure = e) });
+    aenc.configure(acfg);
+    const L0 = audioBuf.getChannelData(0), L1 = audioBuf.getChannelData(1);
+    const step = 4800;
+    for (let i = 0; i < audioBuf.length; i += step) {
+      const n = Math.min(step, audioBuf.length - i);
+      const data = new Float32Array(n * 2); data.set(L0.subarray(i, i + n), 0); data.set(L1.subarray(i, i + n), n);
+      const ad = new w.AudioData({ format: "f32-planar", sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((i / SR) * 1e6), data });
+      aenc.encode(ad); ad.close();
+    }
+    await aenc.flush();
+    if (failure) throw failure;
+  }
+  muxer.finalize();
+  onProgress(1);
+  return { blob: new Blob([target.buffer], { type: "video/mp4" }), ext: "mp4" };
+}
