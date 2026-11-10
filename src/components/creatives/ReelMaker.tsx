@@ -7,7 +7,7 @@
  */
 import { CSSProperties, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PageVisible } from "@/components/AppGuards";
-import { Upload, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
+import { Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
@@ -15,7 +15,7 @@ import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "
 import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
-type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number };
+type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals };
 type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string };
 type Visuals = "ai" | "photo" | "video";
 type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string };
@@ -73,7 +73,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
           seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "", photo_query: "", credit: "", pick: 0 })));
         return;
       }
-      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "", photo_query: s.photo_query || "", credit: "", pick: 0 }));
+      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "", photo_query: s.photo_query || "", credit: "", pick: 0, kind: visuals }));
       setClips(list);
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) return;
@@ -113,10 +113,15 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: "" }; }
     catch { return { status: "error", note: "Picture couldn't be made. Try again from the clip" }; }
   };
-  const redoPicture = async (c: Clip) => {
-    upd(c.id, { status: "picture", note: "" });
-    upd(c.id, await getVisual(c, visuals, c.pick + 1));
+  /** Swap one clip: the next result for the same search, or the first result for a new search or kind. */
+  const swapClip = async (c: Clip, kind: Visuals = clipKind(c), query = c.photo_query) => {
+    const fresh = kind !== clipKind(c) || query !== c.photo_query;
+    const next = { ...c, photo_query: query };
+    upd(c.id, { status: "picture", note: "", photo_query: query });
+    const got = await getVisual(next, kind, fresh ? 0 : c.pick + 1);
+    upd(c.id, { ...got, kind });
   };
+  const clipKind = (c: Clip): Visuals => c.kind || (c.video && c.credit ? "video" : c.credit ? "photo" : "ai");
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
   const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace] };
@@ -189,7 +194,6 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                       <div className="flex items-center gap-1">
                         <IconBtn t={t} title="Earlier" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={13} /></IconBtn>
                         <IconBtn t={t} title="Later" onClick={() => move(i, 1)} disabled={i === clips.length - 1}><ArrowDown size={13} /></IconBtn>
-                        <IconBtn t={t} title={visuals === "ai" ? "New picture" : "A different one"} onClick={() => redoPicture(c)} disabled={c.status === "picture" || c.status === "video" || source === "board"}><ImageIcon size={13} /></IconBtn>
                         <IconBtn t={t} title="Remove" onClick={() => setClips(l => l.filter(x => x.id !== c.id))}><X size={13} /></IconBtn>
                       </div>
                     </div>
@@ -200,6 +204,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                       </select>
                     </div>
                     {c.note && <div style={{ fontSize: 12, color: c.status === "error" ? t.RED : t.MUTED }}>{c.note}</div>}
+                    <SwapRow t={t} c={c} kind={clipKind(c)} busy={c.status === "picture" || c.status === "video"} onSwap={(k, q) => swapClip(c, k, q)} />
                     {c.credit && <div style={{ fontSize: 11.5, color: t.FAINT }}>{c.credit}</div>}
                   </div>
                 </div>))}
@@ -232,6 +237,28 @@ const field = (t: T): CSSProperties => ({ height: 36, borderRadius: 10, boxShado
 function Row({ t, label, children }: { t: T; label: string; children: ReactNode }) {
   return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 54, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
 }
+/** "Swap clip" plus what to look for and which kind (real video, real photo or AI picture). */
+function SwapRow({ t, c, kind, busy, onSwap }: { t: T; c: Clip; kind: Visuals; busy: boolean; onSwap: (kind: Visuals, query: string) => void }) {
+  const [q, setQ] = useState(c.photo_query || c.text || "");
+  const [k, setK] = useState<Visuals>(kind);
+  useEffect(() => { setQ(c.photo_query || c.text || ""); }, [c.photo_query]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setK(kind); }, [kind]);
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <Btn onClick={() => onSwap(k, q.trim())} disabled={busy} style={{ height: 32 }} title="Bring in a different clip for this scene">
+        {busy ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}Swap clip</Btn>
+      <div className="flex items-center gap-1">
+        {([["video", "Video"], ["photo", "Photo"], ["ai", "AI"]] as [Visuals, string][]).map(([v, l]) => (
+          <button key={v} onClick={() => setK(v)} aria-pressed={k === v} title={v === "ai" ? "AI-made picture" : `Real ${l.toLowerCase()}`}
+            style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 600,
+              background: k === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: k === v ? "#fff" : t.MUTED, boxShadow: k === v ? "none" : t.BTN }}>{l}</button>))}
+      </div>
+      {k !== "ai" && <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && !busy && onSwap(k, q.trim())} placeholder="What to look for, e.g. Fushimi Inari at night"
+        title="Change this and press Enter or Swap clip" style={{ ...field(t), height: 32, flex: 1, minWidth: 160, fontSize: 12.5 }} />}
+    </div>
+  );
+}
+
 /** Free Creative Commons music (CC0 / CC BY, fine for business use), or your own track. */
 function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, setVolume }: { t: T; query: string; mood: string; seconds: number; music: File | null; credit: string; onPick: (f: File | null, credit: string) => void; volume: number; setVolume: (v: number) => void }) {
   const [q, setQ] = useState(query);
