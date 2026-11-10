@@ -1,7 +1,8 @@
 /**
  * musicFit.ts — makes the music fit the reel.
  *  • analyseTrack: finds the beat (tempo + where each beat falls) and the loudness over time
- *  • bestStart:    skips a quiet intro and starts the music on a beat where it's already going
+ *  • bestParts:    finds the strongest stretches of the song (chorus / drop) for the reel's length
+ *  • bestStart:    the best of those
  *  • fitToBeat:    nudges each clip's length so cuts land on the beat
  *  • gainAt:       the volume at any moment: a short fade in, and a long, smooth fade out that
  *                  finishes exactly when the reel ends (over the end card), so it never stops abruptly
@@ -47,21 +48,46 @@ export function analyseTrack(buf: AudioBuffer): TrackInfo {
   return { duration: buf.duration, bpm: Math.round(60 / beat), beat, beats, loud, hop };
 }
 
-/** Where to start the music: the first beat after any quiet intro, leaving enough music for the reel. */
-export function bestStart(info: TrackInfo, reelSeconds: number): number {
-  const sorted = Array.from(info.loud).sort((x, y) => x - y);
-  const typical = sorted[Math.floor(sorted.length * 0.6)] || 0;
-  const avg = (t: number, len: number) => {
-    const s = Math.floor(t / info.hop), e = Math.min(info.loud.length, Math.floor((t + len) / info.hop));
-    let sum = 0; for (let i = s; i < e; i++) sum += info.loud[i];
-    return e > s ? sum / (e - s) : 0;
+/**
+ * The best parts of a song for a reel of this length, best first (up to `count`, spread apart).
+ * A part scores well when:
+ *  • it is full and loud for the whole reel (the chorus or "drop", not the quiet intro or a breakdown)
+ *  • it doesn't dip into a quiet patch halfway through
+ *  • it starts on a beat right where the song lifts (a new section kicking in feels like a proper start)
+ */
+export function bestParts(info: TrackInfo, reelSeconds: number, count = 3): number[] {
+  const L = Math.min(Math.max(5, reelSeconds), info.duration);
+  const n = info.loud.length, hop = info.hop;
+  const pre = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) pre[i + 1] = pre[i] + info.loud[i];
+  const mean = (t: number, len: number) => {
+    const s = Math.max(0, Math.floor(t / hop)), e = Math.min(n, Math.floor((t + len) / hop));
+    return e > s ? (pre[e] - pre[s]) / (e - s) : 0;
   };
-  const latest = Math.max(0, info.duration - reelSeconds - 1);
-  for (const b of info.beats) {
-    if (b > latest || b > info.duration * 0.5) break;
-    if (avg(b, Math.max(0.3, info.beat)) >= typical * 0.8 && avg(b, 2) >= typical * 0.8) return Math.round(b * 100) / 100;
+  const overall = mean(0, info.duration) || 1e-6;
+  const latest = Math.max(0, info.duration - L);
+  const starts = (info.beats.length ? info.beats : [0]).filter(b => b <= latest + 0.01);
+  if (!starts.length) return [0];
+  const scored = starts.map(b => {
+    const energy = mean(b, L) / overall;                               // how full this stretch is
+    let dip = Infinity;                                               // its quietest 3 seconds
+    for (let t = b; t + 3 <= b + L; t += 1.5) dip = Math.min(dip, mean(t, 3) / overall);
+    if (!isFinite(dip)) dip = energy;
+    const lift = Math.min(2, Math.max(0.5, mean(b, 2) / (mean(b - 3, 3) || 1e-6)));  // a section kicking in
+    return { at: Math.round(b * 100) / 100, score: energy + 0.5 * Math.min(dip, 1.2) + 0.3 * Math.log2(lift) };
+  }).sort((x, y) => y.score - x.score);
+  const gap = Math.max(6, L * 0.5);
+  const out: number[] = [];
+  for (const c of scored) {
+    if (out.every(o => Math.abs(o - c.at) >= gap)) out.push(c.at);
+    if (out.length >= count) break;
   }
-  return 0;
+  return out;
+}
+
+/** Where to start the music: the best part of the song for this reel. */
+export function bestStart(info: TrackInfo, reelSeconds: number): number {
+  return bestParts(info, reelSeconds, 1)[0] ?? 0;
 }
 
 /**

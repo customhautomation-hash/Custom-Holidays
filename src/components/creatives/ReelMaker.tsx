@@ -11,7 +11,7 @@ import { Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
-import { analyseTrack, bestStart, fitToBeat, MusicFit, TrackInfo } from "@/lib/musicFit";
+import { analyseTrack, bestParts, bestStart, fitToBeat, gainAt, MusicFit, TrackInfo } from "@/lib/musicFit";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
 import { W, H, END, ReelLook, TextFormat, Transition, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
 
@@ -56,6 +56,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const cancel = useRef(false);
+  // Every clip search can be cancelled by Stop, and gives up on its own if it takes too long
+  const aborts = useRef(new Set<AbortController>());
   const boardReady = board.scenes.filter(s => s.image_path || s.video_path);
 
   useEffect(() => { if (!videoOn) setOpt(o => ({ ...o, moving: false })); }, [videoOn]);
@@ -77,7 +79,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const upd = (id: string, p: Partial<Clip>) => setClips(l => l.map(c => (c.id === id ? { ...c, ...p } : c)));
 
   const make = async () => {
-    setErr(""); cancel.current = false;
+    setErr(""); cancel.current = false; aborts.current = new Set();
     if (source === "board" && !boardReady.length) { setErr("Make a storyboard first, or choose New clips"); return; }
     if (source === "new" && !brief.trim()) { setErr("Describe the reel first"); return; }
     setBusy("Planning the reel"); setClips([]); setPlan(null);
@@ -116,23 +118,36 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     } catch (e: any) { setErr(e?.message || "The reel couldn't be made"); }
     finally { setBusy(""); }
   };
-  const stop = () => { cancel.current = true; setBusy(""); stopOnServer(undefined, "ltx23.json"); setClips(l => l.map(c => (c.status === "picture" || c.status === "video" ? { ...c, status: c.image ? "ready" : "error" } : c))); };
+  const stop = () => { cancel.current = true; setBusy(""); aborts.current.forEach(a => a.abort()); aborts.current.clear(); stopOnServer(undefined, "ltx23.json"); setClips(l => l.map(c => (c.status === "picture" || c.status === "video" ? { ...c, status: c.image ? "ready" : "error" } : c))); };
 
   /** A picture or clip for one scene: real photo / real video clip (falls back to an AI picture), or an AI picture. */
   const getVisual = async (c: Clip, kind: Visuals, pick: number): Promise<Partial<Clip>> => {
-    if (kind !== "ai") {
-      try {
-        // Don't reuse a photo or clip that's already in this reel
-        const used = clipsRef.current.filter(x => x.id !== c.id && x.ref).map(x => x.ref!);
-        const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, seconds: c.seconds });
-        return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick, status: "ready", note: "" };
-      } catch (e: any) {
-        try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: `${e?.message || "No real one found"}. An AI picture is used instead` }; }
-        catch { return { status: "error", note: "Nothing could be found or made for this clip. Try again" }; }
+    const ctl = new AbortController(); aborts.current.add(ctl);
+    const opts = { signal: ctl.signal };
+    const aiPicture = async (note: string): Promise<Partial<Clip>> => {
+      try { return { image: await makePicture(c.image_prompt, "9:16", { ...opts, limit: 75_000 }), video: null, credit: "", status: "ready", note }; }
+      catch (e: any) {
+        if (e?.message === "stopped") return { status: c.image || c.video ? "ready" : "error", note: "" };
+        return { status: "error", note: e?.message === "This took too long" ? "This took too long. Press Swap clip to try again" : "Nothing could be found or made for this clip. Press Swap clip to try again" };
       }
-    }
-    try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: "" }; }
-    catch { return { status: "error", note: "Picture couldn't be made. Try again from the clip" }; }
+    };
+    try {
+      if (kind !== "ai") {
+        try {
+          // Don't reuse a photo or clip that's already in this reel
+          const used = clipsRef.current.filter(x => x.id !== c.id && x.ref).map(x => x.ref!);
+          const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, seconds: c.seconds },
+            { ...opts, limit: kind === "video" ? 90_000 : 60_000 });
+          const p = typeof d.pick === "number" ? d.pick : pick;
+          return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" };
+        } catch (e: any) {
+          if (e?.message === "stopped") return { status: c.image || c.video ? "ready" : "error", note: "" };
+          const why = e?.message === "This took too long" ? `No real ${kind === "video" ? "clip" : "photo"} came back in time` : (e?.message || "No real one found");
+          return await aiPicture(`${why}. An AI picture is used instead`);
+        }
+      }
+      return await aiPicture("");
+    } finally { aborts.current.delete(ctl); }
   };
   /** Swap one clip: the next result for the same search, or the first result for a new search or kind. */
   const swapClip = async (c: Clip, kind: Visuals = clipKind(c), query = c.photo_query) => {
@@ -155,6 +170,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
   const totalRef = useRef(total); totalRef.current = total;
   const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total };
+  // The strongest stretches of the song for this reel's length; "Best part" steps through them
+  const parts = useMemo(() => (track ? bestParts(track, Math.max(10, total), 3) : []), [track, Math.round(total)]);
+  const partNo = parts.findIndex(p => Math.abs(p - musicStart) < 0.05);
 
   return (
     <div className="flex flex-col gap-6">
@@ -246,7 +264,14 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                   <label className="flex items-center gap-3">Music starts at
                     <input type="range" min={0} max={Math.max(0, Math.floor(track.duration - 2))} step={0.1} value={musicStart} onChange={e => setMusicStart(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} />
                     <span style={{ fontVariantNumeric: "tabular-nums", width: 36 }}>{Math.floor(musicStart / 60)}:{String(Math.floor(musicStart % 60)).padStart(2, "0")}</span>
-                    <Btn onClick={() => setMusicStart(bestStart(track, total))} style={{ height: 30 }}>Best part</Btn></label>
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Btn onClick={() => parts.length && setMusicStart(parts[(partNo + 1) % parts.length])} style={{ height: 30 }}>
+                      {partNo < 0 ? "Best part" : parts.length > 1 ? `Next best part (${partNo + 1} of ${parts.length})` : "Best part"}</Btn>
+                    <ListenPart t={t} music={music} start={musicStart} seconds={total} fit={fit} />
+                    {partNo >= 0 && <Muted>{partNo === 0 ? "The strongest part of the song" : `Option ${partNo + 1}`}</Muted>}
+                  </div>
+                  <Muted>Best part looks at how loud and full the song is moment by moment, and picks the stretch the length of your reel that stays strongest the whole way (usually the chorus or the drop), starting on a beat where the song lifts. Press it again for the next option, and Listen to hear exactly what the reel will use.</Muted>
                   <label className="flex items-center gap-2" style={{ cursor: "pointer" }}><input type="checkbox" checked={onBeat} onChange={e => setOnBeat(e.target.checked)} style={{ accentColor: "#13585B" }} />Cut the clips on the beat</label>
                   <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
               </div></Row>}
@@ -352,6 +377,41 @@ function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, s
       <Muted>Free Creative Commons music (CC0 and CC BY, fine for business use) from Jamendo via Openverse.</Muted>
     </div>
   );
+}
+
+/** Plays the part of the song the reel will use, with the same fade in and fade out. */
+function ListenPart({ t, music, start, seconds, fit }: { t: T; music: File; start: number; seconds: number; fit: MusicFit }) {
+  const [on, setOn] = useState(false);
+  const [at, setAt] = useState(0);
+  const ref = useRef<{ a: HTMLAudioElement; url: string; timer: number } | null>(null);
+  const end = () => {
+    const r = ref.current; ref.current = null;
+    if (r) { clearInterval(r.timer); r.a.pause(); URL.revokeObjectURL(r.url); }
+    setOn(false); setAt(0);
+  };
+  useEffect(() => end, []);
+  useEffect(() => { if (ref.current) end(); }, [start, music]);   // moved the start: stop the old one
+  const play = async () => {
+    if (ref.current) { end(); return; }
+    const url = URL.createObjectURL(music);
+    const a = new Audio(url); a.preload = "auto";
+    await new Promise<void>(res => { a.onloadedmetadata = () => res(); a.onerror = () => res(); });
+    a.currentTime = Math.min(start, Math.max(0, (a.duration || start) - 0.5));
+    a.volume = 0;
+    const len = Math.max(3, seconds);
+    const began = performance.now();
+    const timer = window.setInterval(() => {
+      const t2 = (performance.now() - began) / 1000;
+      if (t2 >= len) { end(); return; }
+      if (a.ended && fit.loop) { a.currentTime = 0; a.play().catch(() => {}); }
+      a.volume = Math.max(0, Math.min(1, gainAt(t2, len, fit)));
+      setAt(t2);
+    }, 50);
+    ref.current = { a, url, timer };
+    setOn(true);
+    a.play().catch(() => end());
+  };
+  return <Btn onClick={play} style={{ height: 30 }}>{on ? <Square size={13} /> : <Play size={13} />}{on ? `Stop ${clock(at)} / ${clock(seconds)}` : "Listen"}</Btn>;
 }
 
 function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {

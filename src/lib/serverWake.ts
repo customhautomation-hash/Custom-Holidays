@@ -72,7 +72,10 @@ export function installServerWake() {
       for (;;) {
         try {
           const res = await original(input, init);
-          if ((res.status === 502 || res.status === 503 || res.status === 504) && canRetry && Date.now() - started < WAIT_MS) {
+          // A real answer from our server (JSON, e.g. "no clip found") is returned straight away; only Render's
+          // own "starting up" pages (HTML or empty) mean the server is asleep and worth retrying
+          const ours = (res.headers.get("content-type") || "").includes("application/json");
+          if ((res.status === 502 || res.status === 503 || res.status === 504) && !ours && canRetry && Date.now() - started < WAIT_MS) {
             mark(); await sleep(delay, signal); delay = Math.min(delay * 1.5, 8000); continue;
           }
           return res;

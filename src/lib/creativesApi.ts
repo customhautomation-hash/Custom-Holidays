@@ -1,8 +1,24 @@
 /** Calls used by the Creatives page and the Reel maker. */
 import { API_ROOT } from "@/lib/api";
 
-export async function post(path: string, body: any) {
-  const r = await fetch(`${API_ROOT}${path}`, { method: "POST", headers: body instanceof FormData ? {} : { "Content-Type": "application/json" }, body: body instanceof FormData ? body : JSON.stringify(body) });
+/** POST to the backend. `limit` (ms) gives up after that long; `signal` lets a Stop button cancel it. */
+export async function post(path: string, body: any, opts: { limit?: number; signal?: AbortSignal } = {}) {
+  const ctl = new AbortController();
+  const onAbort = () => ctl.abort();
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
+  let timedOut = false;
+  const timer = opts.limit ? setTimeout(() => { timedOut = true; ctl.abort(); }, opts.limit) : 0;
+  let r: Response;
+  try {
+    r = await fetch(`${API_ROOT}${path}`, { method: "POST", headers: body instanceof FormData ? {} : { "Content-Type": "application/json" }, body: body instanceof FormData ? body : JSON.stringify(body), signal: ctl.signal });
+  } catch (e: any) {
+    if (timedOut) throw new Error("This took too long");
+    if (e?.name === "AbortError") throw new Error("stopped");
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
+  }
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.detail || d.error || `Something went wrong (${r.status})`);
   return d;
@@ -39,8 +55,8 @@ export async function runVideo(path: string, body: any, onJob: (id: string) => v
 }
 
 /** Makes one picture in the cloud. */
-export async function makePicture(prompt: string, ratio = "9:16"): Promise<string> {
-  const d = await post("/generate-image", { prompt, ratio });
+export async function makePicture(prompt: string, ratio = "9:16", opts: { limit?: number; signal?: AbortSignal } = {}): Promise<string> {
+  const d = await post("/generate-image", { prompt, ratio }, opts);
   if (!d.success || !d.imagePath) throw new Error("The picture couldn't be made");
   return d.imagePath;
 }

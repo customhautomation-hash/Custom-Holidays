@@ -21,6 +21,7 @@ UA = {"User-Agent": "CustomHolidays-Dashboard/1.0"}
 OPENVERSE = "https://api.openverse.org/v1"
 MUSIC_HOSTS = ("jamendo.com", "freesound.org", "ccmixter.org", "wikimedia.org")
 MAX_BYTES = 40 * 1024 * 1024
+MAX_VIDEO_BYTES = 22 * 1024 * 1024   # a few seconds of 720p is ~5-15MB; bigger files are skipped
 
 
 def _store(content: bytes, bucket: str, ext: str, content_type: str) -> str:
@@ -31,15 +32,24 @@ def _store(content: bytes, bucket: str, ext: str, content_type: str) -> str:
     return f"{os.getenv('SUPABASE_URL', '').rstrip('/')}/storage/v1/object/public/{bucket}/{name}"
 
 
-def _download(url: str, timeout: int = 90) -> bytes:
-    r = requests.get(url, headers=UA, timeout=timeout, stream=True)
-    r.raise_for_status()
-    data = b""
-    for chunk in r.iter_content(256 * 1024):
-        data += chunk
-        if len(data) > MAX_BYTES:
+def _download(url: str, timeout: int = 60, limit: int = MAX_BYTES) -> bytes:
+    """Downloads a file in one go, with a hard limit on size and on total time, so one slow or
+    huge file can never hang the server (the free server has very little memory)."""
+    import time
+    started = time.time()
+    with requests.get(url, headers=UA, timeout=(10, 20), stream=True) as r:
+        r.raise_for_status()
+        size = int(r.headers.get("Content-Length") or 0)
+        if size and size > limit:
             raise Exception("That file is too large")
-    return data
+        data = bytearray()
+        for chunk in r.iter_content(256 * 1024):
+            data.extend(chunk)
+            if len(data) > limit:
+                raise Exception("That file is too large")
+            if time.time() - started > timeout:
+                raise Exception("That file took too long to download")
+    return bytes(data)
 
 
 # ── Photos and video clips ────────────────────────────────────────────────
@@ -91,9 +101,10 @@ def _pexels_videos(query: str) -> list:
         files = [f for f in v.get("video_files", []) if f.get("file_type") == "video/mp4" and f.get("width") and f.get("height")]
         if not files:
             continue
-        # The file closest to 1080 on its short side, never a huge 4K one
-        files.sort(key=lambda f: (abs(min(f["width"], f["height"]) - 1080), f["width"] * f["height"]))
-        f = files[0]
+        # A light HD file: the smallest one that is at least ~720 on its short side (sharp enough for a
+        # phone screen, a fraction of the size of 1080p/4K). Small files keep the free server fast.
+        good = sorted([f for f in files if min(f["width"], f["height"]) >= 700], key=lambda f: f["width"] * f["height"])
+        f = good[0] if good else max(files, key=lambda f: f["width"] * f["height"])
         out.append({"id": f"pexels-video-{v['id']}", "url": f["link"], "w": v.get("width") or f["width"], "h": v.get("height") or f["height"],
                     "about": _describe(v.get("url", "")), "rank": n, "duration": v.get("duration"),
                     "credit": f"Video: {v.get('user', {}).get('name', 'Pexels')} on Pexels", "link": v.get("url", "")})
@@ -151,10 +162,21 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
             raise Exception("Real video clips need a free Pexels key (PEXELS_API_KEY on Render)")
         raise Exception("No match found for this scene")
     pool.sort(key=lambda it: -it["score"])
-    choice = pool[pick % len(pool)]
-    data = _download(choice["url"])
-    url = _store(data, "stock", ".mp4" if kind == "video" else ".jpg", "video/mp4" if kind == "video" else "image/jpeg")
-    return {"url": url, "id": choice["id"], "credit": choice["credit"], "link": choice.get("link", ""), "source": source, "options": len(pool)}
+    # Try the chosen one; if it is too big, too slow or broken, quietly use the next best (up to 3 tries)
+    last = None
+    for step in range(min(3, len(pool))):
+        choice = pool[(pick + step) % len(pool)]
+        try:
+            data = _download(choice["url"], timeout=45, limit=MAX_VIDEO_BYTES if kind == "video" else MAX_BYTES)
+        except Exception as e:
+            print("Stock download skipped:", choice["id"], e)
+            last = e
+            continue
+        url = _store(data, "stock", ".mp4" if kind == "video" else ".jpg", "video/mp4" if kind == "video" else "image/jpeg")
+        del data
+        return {"url": url, "id": choice["id"], "credit": choice["credit"], "link": choice.get("link", ""), "source": source,
+                "options": len(pool), "pick": (pick + step) % len(pool)}
+    raise Exception("No usable clip found for this scene" if kind == "video" else "No usable photo found for this scene")
 
 
 # ── Music ─────────────────────────────────────────────────────────────────

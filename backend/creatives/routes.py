@@ -439,7 +439,8 @@ def reel_stock(req: StockRequest):
     try:
         return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds)}
     except Exception as e:
-        raise HTTPException(status_code=404 if "found" in str(e) else 502, detail=str(e))
+        # 422, not 502: a 502 looks like "the server is asleep" to the browser, which then keeps retrying
+        raise HTTPException(status_code=404 if "found" in str(e) else 422, detail=str(e))
 
 
 @router.get("/reel/music")
