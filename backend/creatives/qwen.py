@@ -140,3 +140,73 @@ clouds, gentle camera drift). 2-3 sentences max.
         "image_prompt": "Breathtaking travel destination at golden hour. Wide aerial perspective. Ultra photorealistic RAW photograph. 8K. No people.",
         "video_prompt": "Animate: Gentle wind moves through the scene. Clouds drift slowly. Camera slowly pushes forward.",
     }
+
+def plan_reel(brief: str, seconds: int = 30, clip_count: int = 0) -> dict:
+    """Plan a short vertical reel from a brief: scenes with on-screen text, a title, an end line,
+    an Instagram caption, hashtags and the kind of music that fits."""
+    seconds = max(10, min(int(seconds or 30), 90))
+    scenes = clip_count or max(3, min(10, round(seconds / 4)))
+    prompt = f"""
+You are the social media lead of Custom Holidays, a luxury travel company in Mumbai.
+Plan a {seconds}-second vertical Instagram reel (9:16) from this brief:
+
+"{brief}"
+
+Return ONLY a valid JSON object. No markdown, no explanation.
+
+{{
+  "title": "short hook shown on the first clip, max 6 words",
+  "scenes": [
+    {{
+      "image_prompt": "photographic description of the shot: exact real place names, time of day, light, lens, colours. NO people, NO faces, NO text",
+      "video_prompt": "Animate: subtle natural motion only, 1-2 sentences",
+      "on_screen_text": "max 6 words shown on this clip, or empty",
+      "seconds": 3.5
+    }}
+  ],
+  "end_line": "closing line for the end card, max 8 words",
+  "caption": "Instagram caption, 2-4 short lines, warm and refined, one call to action to message us",
+  "hashtags": ["#luxurytravel", "..."],
+  "music_mood": "e.g. calm piano, upbeat acoustic"
+}}
+
+Rules:
+- Exactly {scenes} scenes. Their seconds add up to about {seconds - 3} (the end card adds 3 seconds).
+- Open with the most striking shot. Vary wide, detail and aerial shots. End on a calm, beautiful shot.
+- On-screen text is short and specific to the place. No emojis in on-screen text.
+- 8 to 14 hashtags, mixing destination and luxury-travel tags.
+"""
+    content = _chat([{"role": "user", "content": prompt}], timeout=180)
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+    content = re.sub(r"```json|```", "", content).strip()
+    start, end = content.find("{"), content.rfind("}") + 1
+    if start == -1 or end <= 0:
+        raise Exception("The reel plan couldn't be read. Please try again")
+    plan = json.loads(content[start:end])
+    clean = []
+    for s in (plan.get("scenes") or [])[:12]:
+        if not isinstance(s, dict) or not s.get("image_prompt"):
+            continue
+        try:
+            sec = float(s.get("seconds") or 3.5)
+        except (TypeError, ValueError):
+            sec = 3.5
+        clean.append({
+            "image_prompt": str(s["image_prompt"]).strip(),
+            "video_prompt": str(s.get("video_prompt") or "Animate: very slow camera push forward.").strip(),
+            "on_screen_text": str(s.get("on_screen_text") or "").strip(),
+            "seconds": max(1.5, min(sec, 8.0)),
+        })
+    if not clean:
+        raise Exception("The reel plan came back empty. Please try again")
+    tags = plan.get("hashtags") or []
+    if isinstance(tags, str):
+        tags = tags.split()
+    return {
+        "title": str(plan.get("title") or "").strip(),
+        "scenes": clean,
+        "end_line": str(plan.get("end_line") or "").strip(),
+        "caption": str(plan.get("caption") or "").strip(),
+        "hashtags": [("#" + str(t).lstrip("#")).strip() for t in tags if str(t).strip()][:20],
+        "music_mood": str(plan.get("music_mood") or "").strip(),
+    }

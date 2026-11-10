@@ -6,53 +6,22 @@
  */
 import { CSSProperties, ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Image as ImageIcon, Film, Wand2, LayoutGrid, Download, Loader2, Square, Upload, RefreshCw, Copy, Check, ArrowRight, ExternalLink } from "lucide-react";
+import { Image as ImageIcon, Film, Wand2, LayoutGrid, Clapperboard, Download, Loader2, Square, Upload, RefreshCw, Copy, Check, ArrowRight, ExternalLink } from "lucide-react";
 import { API_ROOT } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { Page, Card, Btn, Muted, Dot, useT, T } from "@/components/ch/kit";
+import { post, stopOnServer, srcOf, downloadUrl, runVideo } from "@/lib/creativesApi";
+import ReelMaker from "@/components/creatives/ReelMaker";
+import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 
-type Mode = "picture" | "text-video" | "image-video" | "storyboard";
+type Mode = "picture" | "text-video" | "image-video" | "storyboard" | "reel";
 type Ratio = "9:16" | "16:9" | "1:1" | "4:3";
 type Studio = { images: boolean; prompts: boolean; video: { online: boolean; reason?: string; gpu?: string; queue?: number } };
-type Scene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; preview: string | null; video_path: string | null; busy: "" | "image" | "video" | "upload"; error: string };
+export type Scene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; preview: string | null; video_path: string | null; busy: "" | "image" | "video" | "upload"; error: string };
 
 const RATIOS: { v: Ratio; l: string }[] = [{ v: "9:16", l: "Story 9:16" }, { v: "1:1", l: "Square 1:1" }, { v: "4:3", l: "Post 4:3" }, { v: "16:9", l: "Wide 16:9" }];
 const DURATIONS = [3, 5, 8];
 const VIDEO_WAIT = "Videos usually take 3 to 8 minutes";
-
-async function post(path: string, body: any) {
-  const r = await fetch(`${API_ROOT}${path}`, { method: "POST", headers: body instanceof FormData ? {} : { "Content-Type": "application/json" }, body: body instanceof FormData ? body : JSON.stringify(body) });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.detail || d.error || `Something went wrong (${r.status})`);
-  return d;
-}
-const stopOnServer = (job_id?: string, workflow?: string) => post("/stop-generation", { job_id, workflow }).catch(() => {});
-const srcOf = (p: string | null) => (!p ? "" : p.startsWith("http") || p.startsWith("data:") ? p : `${API_ROOT.replace(/\/api$/, "")}/${p}`);
-
-async function downloadUrl(url: string, name: string) {
-  try {
-    const blob = await (await fetch(url)).blob();
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  } catch { window.open(url, "_blank"); }
-}
-
-/** Starts a video job and waits for it (the server answers with a job number straight away). */
-async function runVideo(path: string, body: any, onJob: (id: string) => void, cancelled: () => boolean): Promise<string> {
-  const { job_id, error } = await post(path, body);
-  if (!job_id) throw new Error(error || "The video couldn't be started");
-  onJob(job_id);
-  for (;;) {
-    await new Promise(r => setTimeout(r, 4000));
-    if (cancelled()) throw new Error("stopped");
-    const s = await fetch(`${API_ROOT}/video-status/${job_id}`).then(r => r.json()).catch(() => null);
-    if (!s) continue;
-    if (!s.success) throw new Error("The server restarted while making the video. Please try again");
-    if (s.status === "done" && s.videoPath) return s.videoPath;
-    if (s.status === "error") throw new Error(s.error || "The video couldn't be made");
-    if (s.status === "stopped") throw new Error("stopped");
-  }
-}
 
 function useClock(running: boolean) {
   const [s, setS] = useState(0);
@@ -67,6 +36,7 @@ export default function Creatives() {
   const [mode, setMode] = useState<Mode>("picture");
   const [studio, setStudio] = useState<Studio | null>(null);
   const [handoff, setHandoff] = useState<{ path: string; prompt: string } | null>(null);
+  const [board, setBoard] = useState<{ dest: string; scenes: Scene[] }>({ dest: "", scenes: [] });
 
   // Only trust a proper answer: an older server (or one still waking up) answers differently
   const check = async () => {
@@ -84,7 +54,7 @@ export default function Creatives() {
 
   const tabs: { k: Mode; l: string; I: any }[] = [
     { k: "picture", l: "Picture", I: ImageIcon }, { k: "text-video", l: "Video from text", I: Film },
-    { k: "image-video", l: "Video from a picture", I: Wand2 }, { k: "storyboard", l: "Storyboard", I: LayoutGrid }];
+    { k: "image-video", l: "Video from a picture", I: Wand2 }, { k: "storyboard", l: "Storyboard", I: LayoutGrid }, { k: "reel", l: "Reel", I: Clapperboard }];
 
   const offlineText = !studio ? "Checking the video studio…"
     : studio.video.reason === "not_set_up" ? "Videos aren't connected yet. Pictures work as normal."
@@ -116,7 +86,8 @@ export default function Creatives() {
       <div style={{ display: mode === "picture" ? "block" : "none" }}><Picture t={t} videoOn={videoOn} onAnimate={(path, prompt) => { setHandoff({ path, prompt }); setMode("image-video"); }} /></div>
       <div style={{ display: mode === "text-video" ? "block" : "none" }}><TextVideo t={t} videoOn={videoOn} /></div>
       <div style={{ display: mode === "image-video" ? "block" : "none" }}><ImageVideo t={t} videoOn={videoOn} handoff={handoff} /></div>
-      <div style={{ display: mode === "storyboard" ? "block" : "none" }}><Storyboard t={t} videoOn={videoOn} /></div>
+      <div style={{ display: mode === "storyboard" ? "block" : "none" }}><Storyboard t={t} videoOn={videoOn} onChange={(dest, scenes) => setBoard({ dest, scenes })} /></div>
+      <div style={{ display: mode === "reel" ? "block" : "none" }}><ReelMaker t={t} videoOn={videoOn} board={board} /></div>
     </Page>
   );
 }
@@ -125,17 +96,6 @@ export default function Creatives() {
 function Layout({ left, right }: { left: ReactNode; right: ReactNode }) {
   return <div className="grid gap-6 grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)] items-start">{left}{right}</div>;
 }
-function Label({ t, children }: { t: T; children: ReactNode }) { return <div style={{ fontSize: 12.5, color: t.MUTED, marginBottom: 6 }}>{children}</div>; }
-function Prompt({ t, value, onChange, placeholder, rows = 4 }: { t: T; value: string; onChange: (v: string) => void; placeholder: string; rows?: number }) {
-  return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
-    style={{ width: "100%", borderRadius: 12, boxShadow: t.IN, border: "none", outline: "none", background: t.BG, color: t.INK, padding: "10px 14px", fontSize: 13, lineHeight: 1.55, resize: "vertical", fontFamily: "inherit" }} />;
-}
-function Chips<V extends string | number>({ t, value, options, onChange }: { t: T; value: V; options: { v: V; l: string }[]; onChange: (v: any) => void }) {
-  return <div className="flex flex-wrap gap-2">{options.map(o => (
-    <button key={String(o.v)} onClick={() => onChange(o.v)} style={{ height: 30, padding: "0 12px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 600,
-      background: value === o.v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: value === o.v ? "#fff" : t.MUTED, boxShadow: value === o.v ? "none" : t.BTN }}>{o.l}</button>))}</div>;
-}
-function ErrorNote({ t, text }: { t: T; text: string }) { return text ? <div style={{ fontSize: 12.5, color: t.RED, lineHeight: 1.5 }}>{text}</div> : null; }
 function Stage({ t, ratio, children }: { t: T; ratio: Ratio; children: ReactNode }) {
   const [w, h] = ratio.split(":").map(Number);
   return <div style={{ aspectRatio: `${w} / ${h}`, maxHeight: "68vh", maxWidth: "100%", margin: "0 auto", borderRadius: 14, boxShadow: t.IN, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>{children}</div>;
@@ -275,11 +235,12 @@ function ImageVideo({ t, videoOn, handoff }: { t: T; videoOn: boolean; handoff: 
 }
 
 /* ── Storyboard ── */
-function Storyboard({ t, videoOn }: { t: T; videoOn: boolean }) {
+function Storyboard({ t, videoOn, onChange }: { t: T; videoOn: boolean; onChange: (dest: string, scenes: Scene[]) => void }) {
   const [dest, setDest] = useState(""); const [ratio, setRatio] = useState<Ratio>("9:16"); const [dur, setDur] = useState(5);
   const [busy, setBusy] = useState(false); const [scenes, setScenes] = useState<Scene[]>([]); const [total, setTotal] = useState(0); const [err, setErr] = useState("");
   const jobId = useRef<string>(); const poll = useRef<any>(); const cancels = useRef<Record<number, boolean>>({});
   useEffect(() => () => clearInterval(poll.current), []);
+  useEffect(() => { onChange(dest, scenes); }, [scenes]); // eslint-disable-line react-hooks/exhaustive-deps
   const upd = (n: number, p: Partial<Scene>) => setScenes(l => l.map(s => (s.scene === n ? { ...s, ...p } : s)));
 
   const start = async () => {

@@ -1,0 +1,287 @@
+/**
+ * ReelMaker — a vertical Instagram reel from a brief, or from the Storyboard's clips.
+ * 1. The brief is turned into a plan (scenes, on-screen text, caption, hashtags, music mood).
+ * 2. A picture is made for each scene in the cloud; with the video studio on, each becomes a moving clip.
+ * 3. Text, title, logo, end card and music are switched on or off with buttons, previewed live,
+ *    and the reel is recorded in the browser as an MP4 (1080×1920).
+ */
+import { CSSProperties, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
+import { Card, Btn, Muted, T } from "@/components/ch/kit";
+import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
+import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
+import { W, H, END, ReelLook, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
+
+type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
+type Clip = { id: string; image_prompt: string; video_prompt: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string };
+type Plan = { title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string };
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+export default function ReelMaker({ t, videoOn, board }: { t: T; videoOn: boolean; board: { dest: string; scenes: BoardScene[] } }) {
+  const [brief, setBrief] = useState("");
+  const [seconds, setSeconds] = useState(30);
+  const [source, setSource] = useState<"new" | "board">("new");
+  const [opt, setOpt] = useState({ text: true, title: true, logo: true, end: true, music: false, moving: false });
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [endSub, setEndSub] = useState("");
+  const [music, setMusic] = useState<File | null>(null);
+  const [volume, setVolume] = useState(0.8);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  const cancel = useRef(false);
+  const boardReady = board.scenes.filter(s => s.image_path || s.video_path);
+
+  useEffect(() => { if (!videoOn) setOpt(o => ({ ...o, moving: false })); }, [videoOn]);
+  const toggle = (k: keyof typeof opt) => setOpt(o => ({ ...o, [k]: !o[k] }));
+  const upd = (id: string, p: Partial<Clip>) => setClips(l => l.map(c => (c.id === id ? { ...c, ...p } : c)));
+
+  const make = async () => {
+    setErr(""); cancel.current = false;
+    if (source === "board" && !boardReady.length) { setErr("Make a storyboard first, or choose New clips"); return; }
+    if (source === "new" && !brief.trim()) { setErr("Describe the reel first"); return; }
+    setBusy("Planning the reel"); setClips([]); setPlan(null);
+    try {
+      const n = source === "board" ? boardReady.length : 0;
+      const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
+      setPlan({ title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood });
+      if (source === "board") {
+        setClips(boardReady.map((s, i) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: p.scenes[i]?.on_screen_text || "",
+          seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "" })));
+        return;
+      }
+      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "" }));
+      setClips(list);
+      for (let i = 0; i < list.length; i++) {
+        if (cancel.current) return;
+        setBusy(`Making picture ${i + 1} of ${list.length}`);
+        upd(list[i].id, { status: "picture" });
+        try { const img = await makePicture(list[i].image_prompt, "9:16"); list[i].image = img; upd(list[i].id, { image: img, status: "ready" }); }
+        catch { upd(list[i].id, { status: "error", note: "Picture couldn't be made. Try again from the clip" }); }
+      }
+      if (opt.moving && videoOn) {
+        for (let i = 0; i < list.length; i++) {
+          if (cancel.current || !list[i].image) continue;
+          setBusy(`Making moving clip ${i + 1} of ${list.length} on the main PC`);
+          upd(list[i].id, { status: "video" });
+          try {
+            const v = await runVideo("/generate-video", { image_path: list[i].image, image_prompt: list[i].image_prompt, video_prompt: list[i].video_prompt, ratio: "9:16", duration_seconds: Math.max(3, Math.ceil(list[i].seconds)) }, () => {}, () => cancel.current);
+            upd(list[i].id, { video: v, status: "ready" });
+          } catch (e: any) { upd(list[i].id, { status: "ready", note: e?.message === "stopped" ? "" : "Moving clip failed, the picture is used instead" }); }
+        }
+      }
+    } catch (e: any) { setErr(e?.message || "The reel couldn't be made"); }
+    finally { setBusy(""); }
+  };
+  const stop = () => { cancel.current = true; setBusy(""); stopOnServer(undefined, "ltx23.json"); setClips(l => l.map(c => (c.status === "picture" || c.status === "video" ? { ...c, status: c.image ? "ready" : "error" } : c))); };
+
+  const redoPicture = async (c: Clip) => {
+    upd(c.id, { status: "picture", note: "", video: null });
+    try { upd(c.id, { image: await makePicture(c.image_prompt, "9:16"), status: "ready" }); }
+    catch { upd(c.id, { status: "error", note: "Picture couldn't be made. Try again" }); }
+  };
+  const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
+
+  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub };
+  const usable = clips.filter(c => c.video || c.image);
+  const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card pad="20px">
+        <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-4">
+            <div><Label t={t}>What's the reel about?</Label>
+              <Prompt t={t} rows={3} value={brief} onChange={setBrief} placeholder="Kyoto in cherry blossom season for couples: calm, luxurious, ryokan and private tea ceremony. End with: plan your spring escape" /></div>
+            <div className="flex gap-6 flex-wrap">
+              <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
+              <div><Label t={t}>Clips</Label><Chips t={t} value={source} options={[{ v: "new", l: "New clips from the brief" }, { v: "board", l: `Storyboard clips${boardReady.length ? ` · ${boardReady.length}` : ""}` }]} onChange={setSource} /></div>
+            </div>
+          </div>
+          <div>
+            <Label t={t}>Include</Label>
+            <div className="flex flex-wrap gap-2">
+              <Toggle t={t} on={opt.title} onClick={() => toggle("title")} I={Type} label="Opening title" />
+              <Toggle t={t} on={opt.text} onClick={() => toggle("text")} I={Captions} label="Text on each clip" />
+              <Toggle t={t} on={opt.logo} onClick={() => toggle("logo")} I={Stamp} label="Logo" />
+              <Toggle t={t} on={opt.end} onClick={() => toggle("end")} I={LayoutTemplate} label="End card" />
+              <Toggle t={t} on={opt.music} onClick={() => toggle("music")} I={Music} label="Music" />
+              <Toggle t={t} on={opt.moving} onClick={() => videoOn && toggle("moving")} I={Film} label={videoOn ? "Moving clips (main PC)" : "Moving clips · studio offline"} disabled={!videoOn || source === "board"} />
+            </div>
+            <div style={{ marginTop: 10 }}><Muted>{opt.moving ? "Moving clips take 3 to 8 minutes each on the main PC. Pictures appear first so you can preview straight away." : "Pictures get a slow, cinematic zoom. Turn on Moving clips for real motion when the video studio is online."}</Muted></div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap" style={{ marginTop: 16 }}>
+          <Btn kind="primary" onClick={make} disabled={!!busy}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Clapperboard size={15} />}{busy ? busy : clips.length ? "Make a new reel" : "Make reel"}</Btn>
+          {busy && <Btn onClick={stop} title="Stop"><Square size={14} />Stop</Btn>}
+          <ErrorNote t={t} text={err} />
+        </div>
+      </Card>
+
+      {clips.length > 0 && (
+        <div className="grid gap-6 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] items-start">
+          <div className="flex flex-col gap-6 min-w-0">
+            <Card pad="18px 20px">
+              <div className="flex items-baseline justify-between gap-3" style={{ marginBottom: 6 }}>
+                <b style={{ fontSize: 15 }}>Clips</b><Muted>{usable.length} of {clips.length} ready · {fmt(total)} with the end card</Muted>
+              </div>
+              {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip" style={field(t)} /></Row>}
+              {clips.map((c, i) => (
+                <div key={c.id} className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}>
+                  <div style={{ width: 54, height: 96, borderRadius: 8, overflow: "hidden", flexShrink: 0, boxShadow: t.IN, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {c.video ? <video src={c.video} muted playsInline style={thumb} /> : c.image ? <img src={srcOf(c.image)} alt="" style={thumb} /> : c.status === "error" ? <X size={16} color={t.RED} /> : <Loader2 size={16} className={c.status === "waiting" ? "" : "animate-spin"} color={t.FAINT} />}
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>Clip {i + 1}<span style={{ fontWeight: 400, color: t.MUTED, marginLeft: 8 }}>{
+                        { waiting: "waiting", picture: "making the picture…", video: "making the moving clip…", ready: c.video ? "moving clip" : "picture", error: "needs a retry" }[c.status]}</span></span>
+                      <div className="flex items-center gap-1">
+                        <IconBtn t={t} title="Earlier" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={13} /></IconBtn>
+                        <IconBtn t={t} title="Later" onClick={() => move(i, 1)} disabled={i === clips.length - 1}><ArrowDown size={13} /></IconBtn>
+                        <IconBtn t={t} title="New picture" onClick={() => redoPicture(c)} disabled={c.status === "picture" || c.status === "video" || source === "board"}><ImageIcon size={13} /></IconBtn>
+                        <IconBtn t={t} title="Remove" onClick={() => setClips(l => l.filter(x => x.id !== c.id))}><X size={13} /></IconBtn>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={c.text} onChange={e => upd(c.id, { text: e.target.value })} placeholder={opt.text ? "Text on this clip (optional)" : "Text on clips is switched off"} disabled={!opt.text} style={{ ...field(t), flex: 1 }} />
+                      <select value={c.seconds} onChange={e => upd(c.id, { seconds: Number(e.target.value) })} title="How long this clip shows" style={{ ...field(t), width: 96, flex: "none" }}>
+                        {[1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8].concat(c.seconds).filter((v, k, a) => a.indexOf(v) === k).sort((a, b) => a - b).map(v => <option key={v} value={v}>{v} sec</option>)}
+                      </select>
+                    </div>
+                    {c.note && <div style={{ fontSize: 12, color: c.status === "error" ? t.RED : t.MUTED }}>{c.note}</div>}
+                  </div>
+                </div>))}
+              {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">
+                <input value={plan?.end_line || ""} onChange={e => setPlan(p => p && { ...p, end_line: e.target.value })} placeholder="Closing line" style={field(t)} />
+                <input value={endSub} onChange={e => setEndSub(e.target.value)} placeholder="Website or phone, e.g. +91 98200 00000" style={field(t)} /></div></Row>}
+              {opt.music && <Row t={t} label="Music"><div className="flex flex-col gap-2 w-full">
+                <label className="flex items-center gap-3" style={{ cursor: "pointer", fontSize: 13 }}>
+                  <span style={{ ...field(t), display: "inline-flex", alignItems: "center", gap: 8, width: "auto", color: t.TEAL, fontWeight: 600 }}><Music size={14} />{music ? "Change track" : "Choose a track"}</span>
+                  <span style={{ color: t.MUTED, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{music?.name || (plan?.music_mood ? `Suggested: ${plan.music_mood}` : "MP3 or M4A")}</span>
+                  <input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => setMusic(e.target.files?.[0] || null)} /></label>
+                <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
+                <Muted>Use music you own or have a licence for. Instagram can also add music when you post.</Muted></div></Row>}
+            </Card>
+
+            {plan && (plan.caption || plan.hashtags.length > 0) && (
+              <Card pad="18px 20px">
+                <div className="flex items-center justify-between gap-3"><b style={{ fontSize: 15 }}>Instagram caption</b>
+                  <Btn onClick={() => { navigator.clipboard.writeText(`${plan.caption}\n\n${plan.hashtags.join(" ")}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} style={{ height: 32 }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</Btn></div>
+                <textarea value={plan.caption} onChange={e => setPlan(p => p && { ...p, caption: e.target.value })} rows={4} style={{ ...field(t), height: "auto", padding: "10px 12px", marginTop: 10, lineHeight: 1.55, resize: "vertical", fontFamily: "inherit" }} />
+                <div style={{ marginTop: 8, fontSize: 12.5, color: t.TEAL, lineHeight: 1.6 }}>{plan.hashtags.join(" ")}</div>
+              </Card>)}
+          </div>
+
+          <Preview t={t} clips={usable} look={look} music={opt.music ? music : null} volume={volume} name={(brief || board.dest || "reel").slice(0, 40)} />
+        </div>)}
+    </div>
+  );
+}
+
+const thumb: CSSProperties = { width: "100%", height: "100%", objectFit: "cover" };
+const field = (t: T): CSSProperties => ({ height: 36, borderRadius: 10, boxShadow: t.IN, border: "none", outline: "none", background: t.BG, color: t.INK, padding: "0 12px", fontSize: 13, minWidth: 0, width: "100%" });
+
+function Row({ t, label, children }: { t: T; label: string; children: ReactNode }) {
+  return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 54, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
+}
+function Toggle({ t, on, onClick, I, label, disabled }: { t: T; on: boolean; onClick: () => void; I: any; label: string; disabled?: boolean }) {
+  return <button onClick={onClick} disabled={disabled} aria-pressed={on} style={{ height: 32, padding: "0 12px", borderRadius: 99, border: "none", cursor: disabled ? "default" : "pointer", fontSize: 12.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6,
+    background: on ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: on ? "#fff" : disabled ? t.FAINT : t.MUTED, boxShadow: on ? "none" : t.BTN, opacity: disabled && !on ? 0.7 : 1 }}><I size={13} />{label}</button>;
+}
+function IconBtn({ t, title, onClick, disabled, children }: { t: T; title: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
+  return <button title={title} aria-label={title} onClick={onClick} disabled={disabled} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: t.BG, boxShadow: disabled ? "none" : t.BTN, color: disabled ? t.FAINT : t.TEAL, cursor: disabled ? "default" : "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{children}</button>;
+}
+
+/** Live preview on a canvas, plus export. Media is loaded once and reused while text and timings change. */
+function Preview({ t, clips, look, music, volume, name }: { t: T; clips: Clip[]; look: ReelLook; music: File | null; volume: number; name: string }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const player = useRef<ReelPlayer | null>(null);
+  const cache = useRef(new Map<string, Promise<HTMLImageElement | HTMLVideoElement>>());
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [time, setTime] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [err, setErr] = useState("");
+  const fmtInfo = useMemo(() => recordFormat(), []);
+
+  const mediaKey = clips.map(c => c.video || c.image).join("|");
+  useEffect(() => {
+    let alive = true;
+    if (!clips.length) { setLoaded(null); return; }
+    setLoading(true); setErr("");
+    const get = (kind: "image" | "video", src: string) => {
+      if (!cache.current.has(src)) cache.current.set(src, kind === "video" ? loadVideo(src) : loadImage(src));
+      return cache.current.get(src)!;
+    };
+    (async () => {
+      try {
+        await (document as any).fonts?.ready;
+        const items: Item[] = await Promise.all(clips.map(async c => {
+          const kind = c.video ? "video" as const : "image" as const;
+          return { el: await get(kind, c.video || srcOf(c.image)), kind, seconds: c.seconds, text: c.text };
+        }));
+        const logo = await loadImage("/ch-mark-peach.png").catch(() => null);
+        if (alive) setLoaded({ items, logo });
+      } catch (e: any) { if (alive) setErr(e?.message || "The preview couldn't load"); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [mediaKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Text and timing changes only redraw
+  const L: Loaded | null = useMemo(() => loaded && loaded.items.length === clips.length
+    ? { logo: loaded.logo, items: loaded.items.map((it, i) => ({ ...it, seconds: clips[i].seconds, text: clips[i].text })) } : null, [loaded, clips]);
+
+  useEffect(() => {
+    if (audio.current) { audio.current.pause(); URL.revokeObjectURL(audio.current.src); audio.current = null; }
+    if (music) { audio.current = new Audio(URL.createObjectURL(music)); audio.current.volume = volume; }
+  }, [music]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (audio.current) audio.current.volume = volume; }, [volume]);
+
+  useEffect(() => {
+    const ctx = canvas.current?.getContext("2d");
+    if (!ctx || !L) return;
+    const wasPlaying = player.current?.playing;
+    const at = player.current?.t || 0;
+    player.current?.pause();
+    player.current = new ReelPlayer(ctx, L, look, setTime, audio.current);
+    player.current.seek(Math.min(at, player.current.total));
+    if (wasPlaying) { player.current.play(() => setPlaying(false)); }
+    return () => { player.current?.pause(); };
+  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, music]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const total = L ? totalOf(L.items, look) : 0;
+  const toggle = () => { const p = player.current; if (!p) return; if (p.playing) { p.pause(); setPlaying(false); } else { p.play(() => setPlaying(false)); setPlaying(true); } };
+  const doExport = async () => {
+    if (!L) return;
+    player.current?.pause(); setPlaying(false); setErr(""); setProgress(0);
+    try {
+      const { blob, ext } = await exportReel(L, look, music, volume, setProgress);
+      downloadBlob(blob, `${name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "reel"}-reel.${ext}`);
+    } catch (e: any) { setErr(e?.message?.includes("tainted") || e?.name === "SecurityError" ? "The browser blocked one of the clips. Try making that clip again" : e?.message || "The reel couldn't be saved"); }
+    finally { setProgress(null); }
+  };
+
+  return (
+    <Card pad="18px" className="xl:sticky xl:top-4">
+      <div style={{ position: "relative", width: "100%", maxWidth: 340, margin: "0 auto", aspectRatio: `${W} / ${H}`, borderRadius: 16, overflow: "hidden", background: "#0C2C32", boxShadow: t.IN }}>
+        <canvas ref={canvas} width={W} height={H} style={{ width: "100%", height: "100%", display: "block" }} onClick={toggle} />
+        {(loading || !L) && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#E6EFEC", fontSize: 13, gap: 8 }}>{clips.length ? <><Loader2 size={16} className="animate-spin" />Loading the preview</> : "The preview appears when the first picture is ready"}</div>}
+      </div>
+      <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
+        <button onClick={toggle} disabled={!L || progress != null} aria-label={playing ? "Pause" : "Play"} style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: "#13585B", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
+        <input type="range" min={0} max={total || 1} step={0.05} value={time} disabled={!L || progress != null} onChange={e => { player.current?.pause(); setPlaying(false); player.current?.seek(Number(e.target.value)); }} style={{ flex: 1, accentColor: "#13585B" }} aria-label="Position in the reel" />
+        <span style={{ fontSize: 12, color: t.MUTED, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmt(time)} / {fmt(total)}</span>
+      </div>
+      <Btn kind="primary" onClick={doExport} disabled={!L || progress != null} style={{ width: "100%", marginTop: 14 }}>
+        {progress != null ? <><Loader2 size={15} className="animate-spin" />Saving the reel · {Math.round(progress * 100)}%</> : <><Download size={15} />Download reel ({fmtInfo.ext.toUpperCase()})</>}</Btn>
+      <div style={{ marginTop: 8 }}><Muted>{progress != null ? "Keep this tab open and in front while it saves; it takes as long as the reel." : `1080 × 1920, ready for Instagram${fmtInfo.ext === "webm" ? ". This browser saves WebM; use Chrome or Edge for MP4" : ""}.`}</Muted></div>
+      <ErrorNote t={t} text={err} />
+    </Card>
+  );
+}

@@ -17,7 +17,7 @@ from supabase_client import supabase
 from creatives.flux import generate_image
 from creatives.ltx import generate_video_from_image
 from creatives.ttv import generate_video_from_text
-from creatives.qwen import analyze_uploaded_image, generate_storyboard
+from creatives.qwen import analyze_uploaded_image, generate_storyboard, plan_reel
 
 
 router = APIRouter()
@@ -403,6 +403,23 @@ async def analyze_image(file: UploadFile = File(...)):
             "image_prompt": "Breathtaking travel destination at golden hour. Ultra photorealistic. No people.",
             "video_prompt": "Animate: Gentle wind moves through the scene. Camera slowly pushes forward.",
         }
+
+
+class ReelPlanRequest(BaseModel):
+    brief: str
+    seconds: int = 30
+    clip_count: int = 0
+
+
+@router.post("/reel/plan")
+def reel_plan(req: ReelPlanRequest):
+    """Plans a reel from a brief (scenes, on-screen text, caption, hashtags, music mood)."""
+    if not req.brief.strip():
+        raise HTTPException(status_code=400, detail="Describe the reel first")
+    try:
+        return {"success": True, "plan": plan_reel(req.brief.strip(), req.seconds, req.clip_count)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e) if "reel" in str(e).lower() else "The reel couldn't be planned just now. Please try again in a minute")
 
 
 @router.post("/stop-generation")

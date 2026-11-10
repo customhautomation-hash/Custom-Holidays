@@ -182,6 +182,7 @@ export const STAFF: HelpSection[] = [
       { label: "Video from text", text: "Describe a scene and pick the shape and length. Videos take 3 to 8 minutes." },
       { label: "Video from a picture", text: "Choose a photo, say how it should move, and click Bring it to life. The photo stays as it is; only gentle movement is added." },
       { label: "Storyboard", text: "Type a destination. A short film plan is written scene by scene with a picture for each. Make each clip into a video, or click Make all videos." },
+      { label: "Reel", text: "Describe the reel and pick a length. It plans the clips, makes a picture for each (or moving clips when the video studio is on) and adds the text. Switch the opening title, text on each clip, logo, end card and music on or off, edit any text, reorder clips, then Download reel. It saves as MP4 in Chrome or Edge; keep the tab open while it saves. An Instagram caption and hashtags are written for you to copy." },
     ],
     tips: ["Pictures and videos are kept for 3 days, so download the ones you want to keep.", "If the bar says the video studio is offline, the main PC is off or ComfyUI isn't running. Pictures still work."],
   },
