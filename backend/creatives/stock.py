@@ -178,38 +178,44 @@ def _gemini_scores(prompt: str, images: list) -> list:
     return [float(x) for x in (_json.loads(text[text.find("{"): text.rfind("}") + 1]).get("scores") or [])]
 
 
-def _look_and_rank(cands: list, scene: str, kind: str) -> list:
+def _look_and_rank(cands: list, scene: str, kind: str) -> tuple:
     """Shows the AI the preview frame of up to 8 candidates and asks how well each fits the scene.
-    Returns the candidates best first. If the AI isn't available, the order is unchanged."""
+    Returns (candidates best first with their "fit" 0-10, status, best fit). status: "checked", "busy",
+    "off" (no Gemini key) or "skipped". If the AI isn't available, the order is unchanged."""
+    global _vision_off_until
     cands = [c for c in cands if c.get("thumb")][:8]
-    if len(cands) < 2 or not scene:
-        return cands
+    if len(cands) < 1 or not scene:
+        return cands, "skipped", None
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        return cands, "off", None
+    if _time.time() < _vision_off_until:
+        return cands, "busy", None
     with _Pool(8) as pool:
         thumbs = list(pool.map(lambda c: _thumb(c["thumb"]), cands))
     keep = [(c, t) for c, t in zip(cands, thumbs) if t]
-    if len(keep) < 2:
-        return cands
+    if not keep:
+        return cands, "skipped", None
     prompt = (f"You are choosing stock {'video clips' if kind == 'video' else 'photos'} for a luxury travel Instagram reel.\n"
               f"The shot we need: {scene}\n"
               f"Here are {len(keep)} candidates (image 1 to {len(keep)}; for clips this is one frame).\n"
-              "Score each 0-10 for how well it fits that exact shot: the right place and subject, the right time of day "
-              "(night vs day), the same mood and style (e.g. neon cyberpunk vs calm traditional), and how good it would look "
-              "in a premium reel (sharp, well composed, vertical-friendly, no watermark or text, no awkward posing). "
+              "Score each 0-10 for how well it fits that exact shot. The MAIN SUBJECT must be right first of all: if the shot "
+              "is about a car, a coffee, a pool or a person doing something, a picture of scenery or a skyline scores 0-2 even "
+              "if it's the right city. Then: the right time of day (night vs day), the same mood and style, and how good it "
+              "would look in a premium reel (sharp, well composed, no watermark or text, no awkward posing). "
               'Return ONLY JSON: {"scores": [n1, n2, ...]} in the same order.')
-    global _vision_off_until
-    if _time.time() < _vision_off_until:
-        return cands
     try:
         scores = _gemini_scores(prompt, [t for _, t in keep])
     except Exception as e:
         print("Clip look-check skipped:", e)
-        if "429" in str(e) or "timed out" in str(e).lower():
+        if "429" in str(e) or "timed out" in str(e).lower() or "503" in str(e):
             _vision_off_until = _time.time() + 120     # busy or over the free limit: rest it for 2 minutes
-        return cands
+        return cands, "busy", None
     if len(scores) != len(keep):
-        return cands
-    ranked = sorted(zip(keep, scores), key=lambda z: -(z[1] + z[0][0].get("score", 0) * 0.15))
-    return [c for (c, _), sc in ranked if sc >= 3] or [c for (c, _), _ in ranked]
+        return cands, "skipped", None
+    for (c, _), sc in zip(keep, scores):
+        c["fit"] = sc
+    ranked = sorted(keep, key=lambda z: -(z[0]["fit"] + z[0].get("score", 0) * 0.15))
+    return [c for c, _ in ranked], "checked", max(scores)
 
 
 def _creator(credit: str) -> str:
@@ -229,7 +235,9 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
     avoid = {_creator(c) for c in (avoid_credits or [])} - {""}
     searches = [q for q in dict.fromkeys([query, (alt or "").strip(), " ".join(query.split()[:2])]) if q]
     pool, seen, source = [], set(), ""
-    for q in searches:
+
+    def search(q: str):
+        nonlocal source
         found = []
         if PEXELS_KEY:
             try:
@@ -250,7 +258,12 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
             if _creator(it["credit"]) and _creator(it["credit"]) in avoid:          # same person, often the same shoot
                 it["score"] -= 2.5
             pool.append(it)
-        if len([p for p in pool if p["score"] >= 4]) >= 6:
+
+    # The exact search first; the broader backups only if it found too little (they drift to generic scenery)
+    done = 0
+    for q in searches:
+        search(q); done += 1
+        if len(pool) >= 10:
             break
     if not pool:
         if kind == "video" and not PEXELS_KEY:
@@ -258,20 +271,32 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
         raise Exception("No match found for this scene")
     pool.sort(key=lambda it: -it["score"])
     # Look at the best few before choosing, so the clip really shows what the scene needs.
-    # The order is remembered, so Swap clip moves to the next-best look, not a random one.
+    # If none of them fits, look at the next few (and the backup searches). The order is remembered,
+    # so Swap clip moves to the next-best match, not a random one.
+    checked = "skipped"
     if scene:
         key = (query.lower(), kind, scene[:200].lower())
         with _rank_lock:
             hit = _rank_cache.get(key)
         if hit and _time.time() - hit[0] < 1800:
-            order = {i: n for n, i in enumerate(hit[1])}
+            ids, checked = hit[1], hit[2]
         else:
-            looked = _look_and_rank(pool[:8], scene, kind)
-            order = {c["id"]: n for n, c in enumerate(looked)}
+            looked, checked, best = _look_and_rank(pool[:8], scene, kind)
+            if checked == "checked" and (best or 0) < 6:
+                if len(pool) <= 8:
+                    for q in searches[done:]:
+                        search(q)
+                    pool.sort(key=lambda it: -it["score"])
+                more, st2, best2 = _look_and_rank([p for p in pool if p not in looked][:8], scene, kind)
+                if st2 == "checked":
+                    looked = sorted(looked + more, key=lambda c: -(c.get("fit", 0) + c.get("score", 0) * 0.15))
+            good = [c for c in looked if c.get("fit", 10) >= 4]
+            ids = [c["id"] for c in (good or looked)]
             with _rank_lock:
-                _rank_cache[key] = (_time.time(), [c["id"] for c in looked])
+                _rank_cache[key] = (_time.time(), ids, checked)
                 if len(_rank_cache) > 300:
                     _rank_cache.pop(next(iter(_rank_cache)))
+        order = {i: n for n, i in enumerate(ids)}
         pool.sort(key=lambda it: (order.get(it["id"], 99), -it["score"]))
     # Try the chosen one; if it is too big, too slow or broken, quietly use the next best (up to 3 tries)
     last = None
@@ -286,7 +311,7 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
         url = _store(data, "stock", ".mp4" if kind == "video" else ".jpg", "video/mp4" if kind == "video" else "image/jpeg")
         del data
         return {"url": url, "id": choice["id"], "credit": choice["credit"], "link": choice.get("link", ""), "source": source,
-                "options": len(pool), "pick": (pick + step) % len(pool)}
+                "options": len(pool), "pick": (pick + step) % len(pool), "checked": checked, "fit": choice.get("fit")}
     raise Exception("No usable clip found for this scene" if kind == "video" else "No usable photo found for this scene")
 
 

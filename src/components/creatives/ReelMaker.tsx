@@ -16,7 +16,7 @@ import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "
 import { W, H, END, ReelLook, TextFormat, TextStyle, Grade, FrameStyle, Transition, PACE_FADE, loadReelFonts, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
-type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals; alt?: string; ref?: string; card?: boolean };
+type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals; alt?: string; ref?: string; card?: boolean; check?: string };
 type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string; matches?: string[] };
 type Visuals = "ai" | "photo" | "video";
 type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string; music_tags: string[]; music_energy: string };
@@ -181,7 +181,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
             scene: [c.text && `On-screen words: "${c.text}"`, c.image_prompt].filter(Boolean).join(". ") },
             { ...opts, limit: kind === "video" ? 90_000 : 60_000 });
           const p = typeof d.pick === "number" ? d.pick : pick;
-          return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" };
+          // what the AI look-check said about this clip
+          const check = d.checked === "checked" ? (typeof d.fit === "number" && d.fit < 5 ? "weak" : "ok") : d.checked || "";
+          return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "", check } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "", check };
         } catch (e: any) {
           if (e?.message === "stopped") return { status: c.image || c.video ? "ready" : "error", note: "" };
           const why = e?.message === "This took too long" ? `No real ${kind === "video" ? "clip" : "photo"} came back in time` : (e?.message || "No real one found");
@@ -300,7 +302,10 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                     </div>
                     {c.note && <div style={{ fontSize: 12, color: c.status === "error" ? t.RED : t.MUTED }}>{c.note}</div>}
                     {!c.card && <SwapRow t={t} c={c} kind={clipKind(c)} busy={c.status === "picture" || c.status === "video"} onSwap={(k, q) => swapClip(c, k, q)} />}
-                    {c.credit && <div style={{ fontSize: 11.5, color: t.FAINT }}>{c.credit}</div>}
+                    {c.credit && <div style={{ fontSize: 11.5, color: t.FAINT }}>{c.credit}{c.check === "ok" ? <span style={{ color: t.TEAL }}> · checked by AI: matches</span>
+                      : c.check === "weak" ? <span style={{ color: t.GOLD }}> · the closest match found; try Swap clip or change the search</span>
+                      : c.check === "busy" ? " · not checked by AI (busy right now); Swap clip if it doesn't fit"
+                      : c.check === "off" ? " · not checked by AI: add GEMINI_API_KEY on Render" : ""}</div>}
                   </div>
                 </div>))}
               {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">

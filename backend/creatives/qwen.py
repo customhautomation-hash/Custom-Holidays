@@ -215,6 +215,10 @@ e.g. for a "Cyberpunk Tokyo" section: "Shinjuku neon night", "Tokyo neon alley r
 for "Ancient Kyoto": "Kyoto pagoda", "Fushimi Inari gates", "Gion old street"; for "Rural Japan":
 "Japan rice terraces", "Shirakawa-go village". Every scene in a section gets a DIFFERENT query.
 "image_prompt" must describe that same look precisely (it is also used to check that the clip matches).
+When the scene is about a THING or an ACTIVITY (a car, a coffee, a yacht breakfast, a pool, a spa), the query
+names that subject first and leaves the city out if the city would pull in skyline shots: "Rolls-Royce
+chauffeur", "luxury car interior", "yacht breakfast table", "infinity pool skyline". Only use the city name
+when the scene is the city itself.
 
 Return ONLY a valid JSON object. No markdown, no explanation.
 
