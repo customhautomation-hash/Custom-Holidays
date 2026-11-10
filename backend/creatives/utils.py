@@ -3,12 +3,14 @@ import time
 import uuid
 import requests
 
-COMFY_URL = os.getenv("COMFY_URL", "https://doorbell-scant-snowy.ngrok-free.dev")
+from creatives import comfy
+
 
 
 def submit(workflow):
-    response = requests.post(
-        f"{COMFY_URL}/prompt",
+    comfy.require_online()
+    response = comfy.post(
+        "/prompt",
         json={"prompt": workflow},
         timeout=30,
     )
@@ -26,8 +28,8 @@ def wait(prompt_id, max_minutes=20):
 
     while time.time() < deadline:
         try:
-            response = requests.get(
-                f"{COMFY_URL}/history/{prompt_id}",
+            response = comfy.get(
+                f"/history/{prompt_id}",
                 timeout=30,
             )
             response.raise_for_status()
@@ -65,14 +67,23 @@ def wait(prompt_id, max_minutes=20):
 
 
 def push_image(image_path):
-    ext = os.path.splitext(image_path)[1] or ".jpg"
+    """Send the starting picture to ComfyUI. It can be a file on the server or a web address
+    (pictures made on the Creatives page are stored online)."""
+    comfy.require_online()
+    if image_path.startswith("http"):
+        data = requests.get(image_path, timeout=60)
+        data.raise_for_status()
+        content = data.content
+        ext = os.path.splitext(image_path.split("?")[0])[1] or ".jpg"
+    else:
+        with open(image_path, "rb") as f:
+            content = f.read()
+        ext = os.path.splitext(image_path)[1] or ".jpg"
     new_filename = f"{uuid.uuid4()}{ext}"
-    with open(image_path, "rb") as f:
-        files = {"image": (new_filename, f, "image/jpeg")}
-        response = requests.post(
-            f"{COMFY_URL}/upload/image",
-            files=files,
-            timeout=60,
-        )
-        response.raise_for_status()
+    response = comfy.post(
+        "/upload/image",
+        files={"image": (new_filename, content, "image/jpeg")},
+        timeout=60,
+    )
+    response.raise_for_status()
     return response.json()["name"]

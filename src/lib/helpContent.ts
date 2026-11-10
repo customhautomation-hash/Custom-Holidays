@@ -176,8 +176,14 @@ export const STAFF: HelpSection[] = [
   },
   {
     id: "creatives", group: "Marketing", title: "Creatives", route: "/creatives",
-    intro: "Make images and short videos for social media from a written idea or an uploaded photo.",
-    tips: ["Each image takes 30 to 90 seconds and videos can take several minutes. You can keep working on other pages meanwhile."],
+    intro: "Make pictures and short videos for social media. Pictures are made in the cloud and always work. Videos are made on the office's main PC, so they work while that PC is on. The bar at the top says which is available.",
+    points: [
+      { label: "Picture", text: "Describe it, pick a shape (Story, Square, Post or Wide) and click Make picture. Takes 10 to 30 seconds. Turn into a video sends it straight to Video from a picture." },
+      { label: "Video from text", text: "Describe a scene and pick the shape and length. Videos take 3 to 8 minutes." },
+      { label: "Video from a picture", text: "Choose a photo, say how it should move, and click Bring it to life. The photo stays as it is; only gentle movement is added." },
+      { label: "Storyboard", text: "Type a destination. A short film plan is written scene by scene with a picture for each. Make each clip into a video, or click Make all videos." },
+    ],
+    tips: ["Pictures and videos are kept for 3 days, so download the ones you want to keep.", "If the bar says the video studio is offline, the main PC is off or ComfyUI isn't running. Pictures still work."],
   },
   {
     id: "finance-kpis", group: "Finance", title: "Finance KPIs", route: "/finance-kpis",
@@ -318,11 +324,30 @@ export const COMPANY: HelpSection[] = [
     ],
   },
   {
+    id: "co-video", group: "Running it", title: "Video studio on the main PC",
+    intro: "Videos on the Creatives page are made by ComfyUI on the office's main PC. A small gate on that PC lets only the dashboard in, and Tailscale gives it a permanent address that never changes.",
+    steps: [
+      "On the main PC, make sure ComfyUI makes a video on its own (the LTX video workflow).",
+      "Copy the folder tools/video-studio from the dashboard folder to the main PC, e.g. C:\\CustomHolidays\\video-studio. Open start-video-studio.bat in Notepad and check COMFY_DIR points at ComfyUI.",
+      "Install Tailscale (tailscale.com/download) and sign in with customh.automation@gmail.com.",
+      "Double-click start-video-studio.bat. If Tailscale asks to allow Funnel, click Allow and run it again.",
+      "In Command Prompt type: tailscale funnel status. Copy the https address it shows.",
+      "Open dashboard-key.txt in the video-studio folder and copy the key.",
+      "In Render → Environment add COMFY_URL (the address) and COMFY_KEY (the key), then save.",
+      "Double-click install-autostart.bat so it starts whenever the PC is switched on.",
+    ],
+    tips: [
+      "The main PC must be on, signed in and not asleep for videos. Set Windows → Power → Sleep to Never on that PC.",
+      "ngrok also works (it was used before) but its free plan allows only 1 GB a month, roughly 50 to 100 videos. See README.txt in the folder.",
+    ],
+  },
+  {
     id: "co-setup", group: "Running it", title: "One-time setup still to do",
     intro: "These need the owner's logins, so they are done by hand once. Until then, the features listed won't work fully.",
     points: [
       { label: "Team Chat, Vouchers, Desktop alerts", text: "Run three files in Supabase → SQL Editor: supabase/team_chat.sql, supabase/vouchers.sql and supabase/push_notifications.sql. Then deploy the push-notify function with JWT verification turned off." },
       { label: "Gmail and Drive for everyone", text: "In Google Cloud (project 'automation'): finish Branding, add the Gmail and Drive scopes, click Publish app, and put the client ID and secret into Render and Vercel." },
+      { label: "Videos on the Creatives page", text: "Connect the main PC that runs ComfyUI. See Video studio on the main PC above." },
       { label: "Finance figures from Tally", text: "Run supabase/finance_tally.sql in Supabase → SQL Editor. Then open Finance KPIs, click Download Tally Connector and follow the steps on the computer that has Tally." },
       { label: "Gmail checked every 5 minutes", text: "Run supabase/gmail_auto_check.sql in Supabase → SQL Editor. Until then, Gmail is only checked while someone has the Suppliers page open." },
       { label: "Branded sign-up emails", text: "Set up a sender in Supabase → Authentication → Emails → SMTP Settings (a Gmail app password needs the phone used for 2-step verification). Then paste the five designs from supabase/email_templates into Emails → Templates." },

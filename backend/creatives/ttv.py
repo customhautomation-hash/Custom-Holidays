@@ -8,7 +8,7 @@ import requests
 from creatives.utils import submit, wait
 from creatives.workflows import load_workflow
 
-COMFY = os.getenv("COMFY_URL", "https://doorbell-scant-snowy.ngrok-free.dev")
+from creatives import comfy
 
 OUTPUT = "outputs/videos"
 os.makedirs(OUTPUT, exist_ok=True)
@@ -195,7 +195,7 @@ No watermark. No logos. No subtitles. No on-screen text.
         subfolder = video.get("subfolder", "")
 
         url = (
-            f"{COMFY}/view?"
+            "/view?"
             f"filename={filename}"
             f"&subfolder={subfolder}"
             f"&type=output"
@@ -204,7 +204,7 @@ No watermark. No logos. No subtitles. No on-screen text.
         print("\nDOWNLOAD URL:")
         print(url)
 
-        response = requests.get(url, timeout=120)
+        response = comfy.get(url, timeout=300)
         response.raise_for_status()
 
         new_filename = f"{uuid.uuid4()}.mp4"
@@ -221,23 +221,15 @@ No watermark. No logos. No subtitles. No on-screen text.
 
         public_url = _upload_video_to_supabase(save_path, new_filename)
 
-        def cleanup(fname, local_path):
-            time.sleep(3600)
-            try:
-                from supabase_client import supabase
-                supabase.storage.from_("videos").remove([fname])
-                print(f"Deleted from Supabase: {fname}")
-            except Exception as e:
-                print(f"Supabase delete failed: {e}")
-            try:
-                os.remove(local_path)
-                print(f"Deleted local file: {local_path}")
-            except Exception as e:
-                print(f"Local delete failed: {e}")
+        # Old videos are tidied up by the storage cleanup in flux.py (after 3 days)
 
-        threading.Thread(
-            target=cleanup, args=(new_filename, save_path), daemon=True
-        ).start()
+        try:
+
+            os.remove(save_path)
+
+        except Exception:
+
+            pass
 
         print("\nRETURNING:")
         print(public_url)

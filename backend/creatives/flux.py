@@ -13,31 +13,72 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 
-def delete_all_images():
+KEEP_DAYS = 3   # pictures and videos made on the Creatives page are kept this long, then removed to save space
+
+
+def delete_old_files():
+    """Remove generated pictures and videos older than KEEP_DAYS. Newer ones are never touched."""
+    from datetime import datetime, timedelta, timezone
     try:
         from supabase_client import supabase
-        files = supabase.storage.from_("generated-images").list()
-        if files:
-            names = [f["name"] for f in files]
-            supabase.storage.from_("generated-images").remove(names)
-            print(f"Deleted {len(names)} old images from storage")
-    except Exception as e:
-        print(f"Cleanup error: {e}")
+    except Exception:
+        return
+    cutoff = datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)
+    for bucket in ("generated-images", "videos"):
+        try:
+            files = supabase.storage.from_(bucket).list(options={"limit": 1000}) or []
+            old = []
+            for f in files:
+                stamp = f.get("created_at") or f.get("updated_at")
+                if not stamp:
+                    continue
+                try:
+                    when = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                if when < cutoff:
+                    old.append(f["name"])
+            if old:
+                supabase.storage.from_(bucket).remove(old)
+                print(f"Removed {len(old)} files older than {KEEP_DAYS} days from {bucket}")
+        except Exception as e:
+            print(f"Cleanup of {bucket} skipped: {e}")
 
 
 def cleanup_loop():
-    # Delete immediately on startup
-    delete_all_images()
+    time.sleep(120)   # let the server finish starting first
     while True:
-        time.sleep(3600)
-        delete_all_images()
+        delete_old_files()
+        time.sleep(6 * 3600)
 
 
 # Start cleanup thread
 threading.Thread(target=cleanup_loop, daemon=True).start()
 
 
-def generate_image(image_prompt: str) -> str:
+def _crop_to_ratio(image_bytes: bytes, ratio: str) -> bytes:
+    """The picture model always makes a square. Cut it to the shape asked for (centre crop)."""
+    try:
+        w_r, h_r = [float(x) for x in (ratio or "1:1").split(":")]
+        if not w_r or not h_r or abs(w_r / h_r - 1) < 0.01:
+            return image_bytes
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        w, h = img.size
+        target = w_r / h_r
+        if w / h > target:
+            nw = int(h * target); left = (w - nw) // 2; img = img.crop((left, 0, left + nw, h))
+        else:
+            nh = int(w / target); top = (h - nh) // 2; img = img.crop((0, top, w, top + nh))
+        out = io.BytesIO(); img.save(out, "JPEG", quality=92)
+        return out.getvalue()
+    except Exception as e:
+        print(f"Crop skipped: {e}")
+        return image_bytes
+
+
+def generate_image(image_prompt: str, ratio: str = "1:1") -> str:
     url = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell"
 
     response = requests.post(
@@ -57,6 +98,7 @@ def generate_image(image_prompt: str) -> str:
     data = response.json()
     image_b64 = data["result"]["image"]
     image_bytes = base64.b64decode(image_b64)
+    image_bytes = _crop_to_ratio(image_bytes, ratio)
 
     filename = f"{uuid.uuid4()}.jpg"
     upload_url = f"{SUPABASE_URL}/storage/v1/object/generated-images/{filename}"

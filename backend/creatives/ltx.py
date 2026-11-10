@@ -8,7 +8,7 @@ import requests
 from creatives.utils import submit, wait, push_image
 from creatives.workflows import load_workflow
 
-COMFY = os.getenv("COMFY_URL", "https://doorbell-scant-snowy.ngrok-free.dev")
+from creatives import comfy
 
 OUTPUT = "outputs/videos"
 
@@ -251,7 +251,7 @@ Like a photograph that learned to breathe.
         subfolder = video.get("subfolder", "")
 
         url = (
-            f"{COMFY}/view?"
+            "/view?"
             f"filename={filename}"
             f"&subfolder={subfolder}"
             f"&type=output"
@@ -260,7 +260,7 @@ Like a photograph that learned to breathe.
         print("\nDOWNLOAD URL:")
         print(url)
 
-        response = requests.get(url, timeout=120)
+        response = comfy.get(url, timeout=300)
         response.raise_for_status()
 
         new_filename = f"{uuid.uuid4()}.mp4"
@@ -278,24 +278,15 @@ Like a photograph that learned to breathe.
         # Upload to Supabase and return public URL
         public_url = _upload_video_to_supabase(save_path, new_filename)
 
-        # Delete from Supabase after 1 hour and clean up local file
-        def cleanup(fname, local_path):
-            time.sleep(3600)
-            try:
-                from supabase_client import supabase
-                supabase.storage.from_("videos").remove([fname])
-                print(f"Deleted from Supabase: {fname}")
-            except Exception as e:
-                print(f"Supabase delete failed: {e}")
-            try:
-                os.remove(local_path)
-                print(f"Deleted local file: {local_path}")
-            except Exception as e:
-                print(f"Local delete failed: {e}")
+        # Old videos are tidied up by the storage cleanup in flux.py (after 3 days)
 
-        threading.Thread(
-            target=cleanup, args=(new_filename, save_path), daemon=True
-        ).start()
+        try:
+
+            os.remove(save_path)
+
+        except Exception:
+
+            pass
 
         print("\nRETURNING:")
         print(public_url)

@@ -233,6 +233,17 @@ def openrouter_headers() -> dict:
 def health():
     return {"status": "ok"}
 
+
+@router.get("/creatives/status")
+def creatives_status():
+    """What the Creatives page can do right now: pictures (cloud) and videos (the main PC)."""
+    from creatives import comfy
+    return {
+        "images": bool(os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_GLOBAL_KEY")),
+        "prompts": bool(os.getenv("OPENROUTER_API_KEY")),
+        "video": comfy.status(),
+    }
+
 @router.get("/test")
 def test():
     return {"success": True, "message": "Backend working."}
@@ -261,7 +272,7 @@ def generate_full_storyboard(req: StoryboardRequest):
                 if jobs[job_id]["status"] == "stopped":
                     break
                 try:
-                    image_path = generate_image(scene["image_prompt"])
+                    image_path = generate_image(scene["image_prompt"], req.ratio)
                 except Exception:
                     image_path = None
 
@@ -304,7 +315,7 @@ def storyboard_status(job_id: str):
 @router.post("/generate-image")
 def generate_image_route(req: ImageRequest):
     try:
-        image_path = generate_image(req.prompt)
+        image_path = generate_image(req.prompt, req.ratio)
         return {"success": True, "imagePath": image_path}
     except Exception as error:
         return {"success": False, "error": str(error)}
@@ -400,9 +411,16 @@ async def stop_generation(payload: StopGenerationRequest):
     if payload.job_id and payload.job_id in jobs:
         jobs[payload.job_id]["status"] = "stopped"
         stopped_job = True
+    interrupted = False
+    try:
+        from creatives import comfy
+        if comfy.configured():
+            interrupted = comfy.post("/interrupt", timeout=10).ok
+    except Exception:
+        pass
     return {
         "success": True,
-        "comfy_interrupted": False,
+        "comfy_interrupted": interrupted,
         "job_stopped": stopped_job,
         "workflow": payload.workflow,
     }
