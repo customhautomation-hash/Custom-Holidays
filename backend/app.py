@@ -17,6 +17,7 @@ from itinerary.routes import router as itinerary_router
 from itinerary.supplier_routes import router as suppliers_router
 from gmail.routes import router as gmail_router
 from prices.routes import router as prices_router
+from finance.routes import router as finance_router
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ app.include_router(itinerary_router,  prefix="/api/itinerary")
 app.include_router(suppliers_router,  prefix="/api/suppliers")
 app.include_router(gmail_router,      prefix="/api/gmail")
 app.include_router(prices_router,     prefix="/api/prices")
+app.include_router(finance_router,    prefix="/api/finance")
 
 outputs_dir = Path("outputs")
 outputs_dir.mkdir(exist_ok=True)

@@ -181,7 +181,20 @@ export const STAFF: HelpSection[] = [
   },
   {
     id: "finance-kpis", group: "Finance", title: "Finance KPIs", route: "/finance-kpis",
-    intro: "Revenue, costs, profit and targets for the month, with the latest bookings.",
+    intro: "The company's figures straight from Tally, updated every 15 minutes while Tally is open on the finance computer.",
+    points: [
+      { label: "Top row", text: "Sales so far this month, gross profit and margin, net profit after running costs, and cash and bank today." },
+      { label: "Sales and costs by month", text: "Each month of the financial year. Hover over a month to see its profit. The dashed line is the monthly sales target." },
+      { label: "Targets", text: "This month against the sales and margin targets. Owners set them with the pencil." },
+      { label: "Money owed to us", text: "What clients still owe, biggest first. Advance payments are shown separately." },
+      { label: "Money we owe suppliers", text: "What we still owe DMCs, hotels and other suppliers, biggest first." },
+      { label: "Bank and cash", text: "Today's balance in each bank and cash account. An overdraft shows in red." },
+      { label: "Spending this month", text: "The biggest costs this month, by Tally account." },
+    ],
+    tips: [
+      "If the page says Tally wasn't open, the figures shown are from the last time it was. They update on their own once Tally is opened again.",
+      "The figures are only as up to date as the entries in Tally.",
+    ],
   },
   {
     id: "profile", group: "Your account", title: "Profile and settings", route: "/profile",
@@ -300,6 +313,7 @@ export const COMPANY: HelpSection[] = [
       "Database paused: open supabase.com, open the custom-holidays project, and click Restore if it says Paused.",
       "Gmail disconnected: Profile → Connections → Gmail → Connect, and sign in again.",
       "Server down: open Render → Custom-Holidays → Logs. A red error at the bottom says what failed. Manual Deploy → Deploy latest commit often fixes a one-off problem.",
+      "Finance figures not updating: on the finance computer, check Tally is open with the company loaded. If it still doesn't update, open Finance KPIs, click Download again and run install.bat on that computer.",
       "Website not updating: open Vercel → Deployments. The newest one should say Ready. If it says Error, open it to see why.",
     ],
   },
@@ -309,6 +323,7 @@ export const COMPANY: HelpSection[] = [
     points: [
       { label: "Team Chat, Vouchers, Desktop alerts", text: "Run three files in Supabase → SQL Editor: supabase/team_chat.sql, supabase/vouchers.sql and supabase/push_notifications.sql. Then deploy the push-notify function with JWT verification turned off." },
       { label: "Gmail and Drive for everyone", text: "In Google Cloud (project 'automation'): finish Branding, add the Gmail and Drive scopes, click Publish app, and put the client ID and secret into Render and Vercel." },
+      { label: "Finance figures from Tally", text: "Run supabase/finance_tally.sql in Supabase → SQL Editor. Then open Finance KPIs, click Download Tally Connector and follow the steps on the computer that has Tally." },
       { label: "Gmail checked every 5 minutes", text: "Run supabase/gmail_auto_check.sql in Supabase → SQL Editor. Until then, Gmail is only checked while someone has the Suppliers page open." },
       { label: "Branded sign-up emails", text: "Set up a sender in Supabase → Authentication → Emails → SMTP Settings (a Gmail app password needs the phone used for 2-step verification). Then paste the five designs from supabase/email_templates into Emails → Templates." },
     ],

@@ -231,6 +231,18 @@ const Index = () => {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const [kpi, setKpi] = useState<FinanceKPI | null>(null);
+  // Figures from Tally (Finance page); used for revenue, profit and money owed when available
+  const [tally, setTally] = useState<{ summary: any; targets: { monthly_sales?: number } } | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const r = await fetch(`${API_ROOT}/finance/summary`, { headers: { Authorization: data.session ? `Bearer ${data.session.access_token}` : "" } });
+        const d = r.ok ? await r.json() : null;
+        if (d?.summary) setTally({ summary: d.summary, targets: d.targets || {} });
+      } catch { /* the Finance page explains any problem */ }
+    })();
+  }, []);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -306,11 +318,15 @@ const Index = () => {
       ? `${((leads.filter(l => l.status === "booked").length / leads.length) * 100).toFixed(1)}%`
       : "—";
 
-  const revenueValue = kpi ? fmtCompact(kpi.revenue.realized) : "—";
-  const revenueChange = kpi
+  const tm = tally?.summary?.month;
+  const tTarget = tally?.targets?.monthly_sales;
+  const revenueValue = tm ? fmtCompact(tm.sales) : kpi ? fmtCompact(kpi.revenue.realized) : "—";
+  const revenueChange = tm
+    ? (tTarget ? `${Math.round((tm.sales / tTarget) * 100)}% of the month's target` : "from Tally")
+    : kpi
     ? `${kpi.targets.revenue_variance_pct > 0 ? "+" : ""}${(kpi.targets.revenue_variance_pct * 100).toFixed(0)}% vs target`
     : "—";
-  const revenuePositive = kpi ? kpi.targets.revenue_variance_pct >= 0 : true;
+  const revenuePositive = tm ? true : kpi ? kpi.targets.revenue_variance_pct >= 0 : true;
 
   const suppliersActive = suppliers.filter(s => s.onboarding_status === "completed").length;
 
@@ -421,19 +437,24 @@ const Index = () => {
             </motion.div>
 
             {/* Finance Summary */}
-            {kpi && (
+            {(kpi || tm) && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
                 className="p-5" style={neu}>
                 <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--foreground, #1A2324)" }}>
-                  Finance Summary — {kpi.month_start && new Date(kpi.month_start).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+                  Finance Summary — {tm ? new Date(tm.month + "-01").toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : kpi?.month_start && new Date(kpi.month_start).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
+                  {(tm ? [
+                    { label: "Gross Profit", value: fmtCompact(tm.gross_profit), color: "var(--foreground, #1A2324)" },
+                    { label: "Margin", value: tm.gross_margin == null ? "—" : pct(tm.gross_margin), color: "var(--foreground, #1A2324)" },
+                    { label: "Net Profit", value: fmtCompact(tm.net_profit), color: "var(--foreground, #1A2324)" },
+                    { label: "Cash & Bank", value: fmtCompact(tally!.summary.cash.total), color: "var(--foreground, #1A2324)" },
+                  ] : kpi ? [
                     { label: "Gross Profit", value: fmtCompact(kpi.profit.gross_profit), color: "var(--foreground, #1A2324)" },
                     { label: "Margin", value: pct(kpi.profit.profit_margin), color: "var(--foreground, #1A2324)" },
                     { label: "Expenses", value: fmtCompact(kpi.expenses.total), color: "var(--foreground, #1A2324)" },
                     { label: "Pipeline", value: fmtCompact(kpi.revenue.pipeline_total), color: "var(--foreground, #1A2324)" },
-                  ].map(item => (
+                  ] : []).map(item => (
                     <div key={item.label} className="p-3 text-center" style={neuInset}>
                       <p className="text-lg font-medium tabular-nums" style={{ color: item.color }}>{item.value}</p>
                       <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground, #5B6766)" }}>{item.label}</p>
@@ -458,8 +479,8 @@ const Index = () => {
               },
               {
                 label: "Pending Revenue",
-                value: kpi ? fmtCompact(kpi.revenue.pending) : "—",
-                sub: "awaiting collection",
+                value: tally ? fmtCompact(tally.summary.receivables.total) : kpi ? fmtCompact(kpi.revenue.pending) : "—",
+                sub: tally ? "owed by clients" : "awaiting collection",
                 icon: Clock,
                 color: "var(--muted-foreground, #5B6766)",
               },
@@ -503,8 +524,8 @@ const Index = () => {
                   {[
                     {
                       label: "Revenue",
-                      current: kpi.revenue.realized,
-                      target: kpi.targets.target_revenue,
+                      current: tm ? tm.sales : kpi.revenue.realized,
+                      target: tm && tTarget ? tTarget : kpi.targets.target_revenue,
                       fmt: fmtCompact,
                     },
                     {
