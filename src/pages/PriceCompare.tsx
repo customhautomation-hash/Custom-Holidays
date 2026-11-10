@@ -250,6 +250,7 @@ export default function PriceCompare() {
   const afterFetch = useRef<(c: City, h: Hotel) => void>(() => {});
   const lastAck = useRef(0);
   const visionOff = useRef(false);   // server has no GEMINI_API_KEY → don't keep asking
+  const [extHelp, setExtHelp] = useState(false);   // the "set up the extension" steps
   const fx = useRef<Record<string, number>>({});   // ₹ per 1 unit, for prices a site showed in another currency              // last time the extension confirmed it received a check
   // automatic exact prices: ON by default (switch at the top)
   const [autoOn, setAutoOn] = useState<boolean>(() => { try { return localStorage.getItem("pc:auto") !== "off"; } catch { return true; } });
@@ -1449,8 +1450,21 @@ export default function PriceCompare() {
               style={{ ...pill(BG, autoOn ? GREEN : MUTED), boxShadow: autoOn ? SHADOW_IN : SHADOW_SM, fontSize: 12, padding: "7px 12px", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
               <Zap style={{ width: 13, height: 13 }} /> Auto exact prices: {autoOn ? "ON" : "OFF"}{extVer ? ` · v${extVer}` : ""}
             </button>
-          ) : extReady ? <span title="Update the Grab-price extension to v1.1 for automatic exact prices" style={{ ...pill(BG, WARN), boxShadow: SHADOW_IN, fontSize: 12, padding: "7px 12px" }}>Update Grab-price extension</span>
-            : <span title="Install the Grab-price Chrome extension (tools/grab-price-extension.zip) for exact prices" style={{ ...pill(BG, MUTED), boxShadow: SHADOW_IN, fontSize: 12, padding: "7px 12px" }}>Exact prices: install extension</span>}
+          ) : <span style={{ position: "relative", display: "inline-flex" }}>
+              <button onClick={() => setExtHelp(v => !v)} style={{ ...pill(BG, extReady ? WARN : MUTED), boxShadow: SHADOW_SM, fontSize: 12, padding: "7px 12px", border: "none", cursor: "pointer" }}>
+                {extReady ? "Update Grab-price extension" : "Exact prices: set up the extension"}</button>
+              {extHelp && <div style={{ position: "absolute", right: 0, top: 38, zIndex: 50, width: 360, background: BG, color: TEXT, borderRadius: 14, padding: 16, fontSize: 12.5, lineHeight: 1.55, boxShadow: "0 14px 40px rgba(0,0,0,0.3), " + SHADOW_OUT }}>
+                <b style={{ fontSize: 13.5 }}>Set up the Grab-price extension (Chrome)</b>
+                <ol style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                  <li><a href="/downloads/grab-price-extension.zip" download style={{ color: ACCENT, fontWeight: 600 }}>Download the extension</a> and unzip it (right-click → Extract all).</li>
+                  <li>Open <b>chrome://extensions</b> and switch on <b>Developer mode</b> (top right).</li>
+                  <li>If an older <b>CustomHolidays – Grab Price</b> is there, press <b>Remove</b> on it.</li>
+                  <li>Press <b>Load unpacked</b> and choose the unzipped <b>grab-price-extension</b> folder.</li>
+                  <li>Come back here and press <b>F5</b>.</li>
+                </ol>
+                <div style={{ marginTop: 8, color: MUTED }}>One extension works for this dashboard and BusinessOS. It needs version 2.42 or newer to work on this site.</div>
+              </div>}
+            </span>}
           {status?.configured && (
             <span style={{ ...pill(BG, MUTED), boxShadow: SHADOW_IN, fontSize: 12, padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: 5 }}>
               <KeyRound style={{ width: 13, height: 13, color: ACCENT }} /> {status.searches_left ?? "?"} searches left{status.keys && status.keys > 1 ? ` · key ${status.active_key ?? "-"} of ${status.keys}` : ""}
