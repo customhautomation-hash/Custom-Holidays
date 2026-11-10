@@ -92,7 +92,7 @@ def _pexels_get(path: str, query: str, key: str) -> list:
         for x in r.json().get(key, []):
             if x["id"] not in seen:
                 seen.add(x["id"]); out.append(x)
-        if len(out) >= 25:
+        if len(out) >= 15:          # enough vertical ones: skip the second search (faster)
             break
     return out
 
@@ -158,6 +158,26 @@ def _thumb(url: str):
         return None
 
 
+_vision_off_until = 0.0
+
+
+def _gemini_scores(prompt: str, images: list) -> list:
+    """One quick Gemini call (the free key on Render). No slow backup: if it's busy we just don't look."""
+    import json as _json
+    key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+    if not key:
+        raise Exception("no GEMINI_API_KEY")
+    model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", timeout=15,
+                      headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                      json={"contents": [{"parts": [{"text": prompt}, *[{"inline_data": {"mime_type": m, "data": d}} for m, d in images]]}],
+                            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}})
+    if r.status_code >= 400:
+        raise Exception(f"Gemini {r.status_code}")
+    text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    return [float(x) for x in (_json.loads(text[text.find("{"): text.rfind("}") + 1]).get("scores") or [])]
+
+
 def _look_and_rank(cands: list, scene: str, kind: str) -> list:
     """Shows the AI the preview frame of up to 8 candidates and asks how well each fits the scene.
     Returns the candidates best first. If the AI isn't available, the order is unchanged."""
@@ -176,12 +196,15 @@ def _look_and_rank(cands: list, scene: str, kind: str) -> list:
               "(night vs day), the same mood and style (e.g. neon cyberpunk vs calm traditional), and how good it would look "
               "in a premium reel (sharp, well composed, vertical-friendly, no watermark or text, no awkward posing). "
               'Return ONLY JSON: {"scores": [n1, n2, ...]} in the same order.')
+    global _vision_off_until
+    if _time.time() < _vision_off_until:
+        return cands
     try:
-        from prices.routes import _ai_json
-        ans, _model = _ai_json(prompt, [t for _, t in keep], timeout=40)
-        scores = [float(x) for x in (ans.get("scores") or [])]
+        scores = _gemini_scores(prompt, [t for _, t in keep])
     except Exception as e:
         print("Clip look-check skipped:", e)
+        if "429" in str(e) or "timed out" in str(e).lower():
+            _vision_off_until = _time.time() + 120     # busy or over the free limit: rest it for 2 minutes
         return cands
     if len(scores) != len(keep):
         return cands

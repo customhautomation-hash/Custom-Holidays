@@ -201,6 +201,8 @@ STEP 2. Edit it like a professional:
   views", "Amazing place"). Never repeat the title. Max 8 words, no emojis, no hashtags.
 - TIMING: calm reels 3-5 s per scene, lively 2-3 s, fast 0.8-2 s, single scenery shots 8-30 s, cards 1.5-2.5 s.
   Scenes with more text get more time.
+- ONE SHOT PER SCENE: never ask for split screens, collages, side-by-side or before/after images. For a
+  comparison ("them vs you", "expectation vs reality") show each side as its own scene, one after another.
 - TEXT THAT STAYS: to keep the same words on screen over several clips, give those scenes exactly the
   same on_screen_text. Leave on_screen_text empty when a scene should have no words.
 
@@ -258,6 +260,40 @@ Rules:
 - Use ONLY prices, dates, hotel names and inclusions that appear in the request. Never invent prices or offers.
 - 8 to 14 hashtags, mixing destination and luxury-travel tags.
 """
+    result = _finish_plan(prompt, seconds, clip_count)
+    problems = _plan_problems(result, seconds, clip_count)
+    if problems:     # ask once more, saying exactly what was wrong; keep whichever plan is better
+        fix = prompt + "\n\nIMPORTANT: your previous plan had these problems. Fix them:\n- " + "\n- ".join(problems)
+        try:
+            again = _finish_plan(fix, seconds, clip_count)
+            if len(_plan_problems(again, seconds, clip_count)) < len(problems):
+                result = again
+        except Exception as e:
+            print("Reel re-plan failed:", e)
+    return result
+
+
+_MERGED = re.compile(r"\b(split[- ]?screen|split image|side[- ]by[- ]side|collage|diptych|left half|right half|two images|before and after in one)\b", re.I)
+
+
+def _plan_problems(plan: dict, seconds: int, clip_count: int) -> list:
+    """Things that make a reel look wrong, checked after planning."""
+    out = []
+    scenes = plan.get("scenes") or []
+    shots = [x for x in scenes if x.get("type") != "card"]
+    if any(_MERGED.search(x.get("image_prompt", "")) for x in shots):
+        out.append("A scene asks for a split screen / collage / side-by-side image. Every scene must be ONE single shot; "
+                   "show each side of a comparison as its own scene, one after the other.")
+    pace = (plan.get("format") or {}).get("pace", "")
+    if not clip_count and len(shots) > 3 and pace in ("medium", "fast"):
+        avg = sum(x.get("seconds", 0) for x in shots) / len(shots)
+        if avg > (2.6 if pace == "fast" else 4.2):
+            out.append(f"The scenes are too long for a {pace} reel (about {avg:.1f} s each). Use more, shorter scenes "
+                       f"({'1-2.5' if pace == 'fast' else '2-3.5'} s each) so it feels lively.")
+    return out
+
+
+def _finish_plan(prompt: str, seconds: int, clip_count: int) -> dict:
     plan = None
     for attempt in range(2):   # the free model sometimes returns broken JSON; ask once more
         content = _chat([{"role": "user", "content": prompt}], timeout=180, model=REEL_MODEL)

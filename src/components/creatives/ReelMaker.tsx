@@ -124,15 +124,24 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
       const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null,
         status: s.type === "card" ? "ready" : "waiting", note: "", photo_query: s.photo_query || "", alt: s.photo_query_alt || "", credit: "", pick: 0, kind: visuals, card: s.type === "card" }));
       setClips(list);
-      for (let i = 0; i < list.length; i++) {
-        if (cancel.current) return;
-        if (list[i].card) continue;                    // title cards need no picture
-        setBusy(`${visuals === "ai" ? "Making picture" : visuals === "video" ? "Finding a real video clip" : "Finding a real photo"} ${i + 1} of ${list.length}`);
-        upd(list[i].id, { status: "picture" });
-        const got = await getVisual(list[i], visuals, 0, list);
-        Object.assign(list[i], got);
-        upd(list[i].id, got);
-      }
+      // Two clips are found at the same time (about twice as fast); title cards need no picture
+      const todo = list.map((_, k) => k).filter(k => !list[k].card);
+      let nextJob = 0, finished = 0;
+      const what = visuals === "ai" ? "Making pictures" : visuals === "video" ? "Finding real video clips" : "Finding real photos";
+      setBusy(`${what} · 0 of ${todo.length}`);
+      const worker = async () => {
+        while (nextJob < todo.length && !cancel.current) {
+          const k = todo[nextJob++];
+          upd(list[k].id, { status: "picture" });
+          const got = await getVisual(list[k], visuals, 0, list);
+          Object.assign(list[k], got);
+          upd(list[k].id, got);
+          finished++;
+          if (!cancel.current) setBusy(`${what} · ${finished} of ${todo.length}`);
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      if (cancel.current) return;
       if (opt.moving && videoOn) {
         for (let i = 0; i < list.length; i++) {
           if (cancel.current || list[i].card || !list[i].image || list[i].video) continue;
@@ -247,20 +256,25 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
         <div className="grid gap-6 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] items-start">
           <div className="flex flex-col gap-6 min-w-0">
             <Card pad="18px 20px">
+              <div className="flex items-baseline justify-between gap-3 flex-wrap" style={{ marginBottom: 12 }}>
+                <b style={{ fontSize: 15 }}>Look</b>{plan?.kind && <Muted>Planned as: <b style={{ color: t.INK, fontWeight: 600 }}>{plan.kind}</b></Muted>}
+              </div>
+              <div className="grid gap-x-6 gap-y-2.5 grid-cols-1 lg:grid-cols-2">
+                  <Mini t={t} label="Words" value={fmt.style || "classic"} options={[["classic", "Classic"], ["label", "Label"], ["meme", "Meme"], ["handwritten", "Handwritten"], ["bold", "Bold"], ["none", "None"]]} onChange={v => setFmt(f => ({ ...f, style: v as TextStyle }))} />
+                  <Mini t={t} label="Colour" value={grade} options={[["natural", "Natural"], ["warm", "Warm"], ["film", "Film"], ["moody", "Moody"], ["vibrant", "Vibrant"], ["dreamy", "Dreamy"]]} onChange={v => setGrade(v as Grade)} />
+                  <Mini t={t} label="Frame" value={frame} options={[["full", "Full"], ["cinematic", "Cinematic bars"]]} onChange={v => setFrame(v as FrameStyle)} />
+                  <Mini t={t} label="Text" value={fmt.position} options={[["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]]} onChange={v => setFmt(f => ({ ...f, position: v as any }))} />
+                  <Mini t={t} label="Font" value={fmt.font} options={[["serif", "Elegant"], ["sans", "Modern"]]} onChange={v => setFmt(f => ({ ...f, font: v as any }))} />
+                  <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
+                  <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
+                  <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
+              </div>
+            </Card>
+
+            <Card pad="18px 20px">
               <div className="flex items-baseline justify-between gap-3" style={{ marginBottom: 6 }}>
                 <b style={{ fontSize: 15 }}>Clips</b><Muted>{usable.length} of {clips.length} ready · {clock(total)} with the end card</Muted>
               </div>
-              {plan?.kind && <div style={{ fontSize: 12.5, color: t.MUTED, marginBottom: 8 }}>Planned as: <b style={{ color: t.INK, fontWeight: 600 }}>{plan.kind}</b></div>}
-              <Row t={t} label="Look"><div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
-                <Mini t={t} label="Words" value={fmt.style || "classic"} options={[["classic", "Classic"], ["label", "Label"], ["meme", "Meme"], ["handwritten", "Handwritten"], ["bold", "Bold"], ["none", "None"]]} onChange={v => setFmt(f => ({ ...f, style: v as TextStyle }))} />
-                <Mini t={t} label="Colour" value={grade} options={[["natural", "Natural"], ["warm", "Warm"], ["film", "Film"], ["moody", "Moody"], ["vibrant", "Vibrant"], ["dreamy", "Dreamy"]]} onChange={v => setGrade(v as Grade)} />
-                <Mini t={t} label="Frame" value={frame} options={[["full", "Full"], ["cinematic", "Cinematic bars"]]} onChange={v => setFrame(v as FrameStyle)} />
-                <Mini t={t} label="Text" value={fmt.position} options={[["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]]} onChange={v => setFmt(f => ({ ...f, position: v as any }))} />
-                <Mini t={t} label="Font" value={fmt.font} options={[["serif", "Elegant"], ["sans", "Modern"]]} onChange={v => setFmt(f => ({ ...f, font: v as any }))} />
-                <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
-                <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
-                <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
-              </div></Row>
               {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip (type  /  for a new line)" style={field(t)} /></Row>}
               {clips.map((c, i) => (
                 <div key={c.id} className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}>
@@ -292,7 +306,14 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">
                 <input value={plan?.end_line || ""} onChange={e => setPlan(p => p && { ...p, end_line: e.target.value })} placeholder="Closing line" style={field(t)} />
                 <input value={endSub} onChange={e => setEndSub(e.target.value)} placeholder="Website or phone, e.g. +91 98200 00000" style={field(t)} /></div></Row>}
-              {opt.music && <Row t={t} label="Music"><MusicPicker t={t} tags={plan?.music_tags || []} energy={plan?.music_energy || (pace === "fast" ? "high" : pace === "slow" ? "calm" : "medium")} query={plan?.music_tags?.length ? plan.music_tags.join(" ") : plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
+            </Card>
+
+            <Card pad="18px 20px">
+              <div className="flex items-center justify-between gap-3" style={{ marginBottom: opt.music ? 4 : 0 }}>
+                <b style={{ fontSize: 15 }}>Music</b>
+                {!opt.music && <Btn onClick={() => toggle("music")} style={{ height: 32 }}><Music size={14} />Add music</Btn>}
+              </div>
+              {opt.music && <Row t={t} label="Track"><MusicPicker t={t} tags={plan?.music_tags || []} energy={plan?.music_energy || (pace === "fast" ? "high" : pace === "slow" ? "calm" : "medium")} query={plan?.music_tags?.length ? plan.music_tags.join(" ") : plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
                 onPick={(f, credit) => { setMusic(f); setMusicCredit(credit); }} volume={volume} setVolume={setVolume} /></Row>}
               {opt.music && music && <Row t={t} label="Timing"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
                 {!track ? <Muted>Reading the beat…</Muted> : <>
@@ -333,7 +354,7 @@ const thumb: CSSProperties = { width: "100%", height: "100%", objectFit: "cover"
 const field = (t: T): CSSProperties => ({ height: 36, borderRadius: 10, boxShadow: t.IN, border: "none", outline: "none", background: t.BG, color: t.INK, padding: "0 12px", fontSize: 13, minWidth: 0, width: "100%" });
 
 function Row({ t, label, children }: { t: T; label: string; children: ReactNode }) {
-  return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 54, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
+  return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 92, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
 }
 /** "Swap clip" plus what to look for and which kind (real video, real photo or AI picture). */
 function SwapRow({ t, c, kind, busy, onSwap }: { t: T; c: Clip; kind: Visuals; busy: boolean; onSwap: (kind: Visuals, query: string) => void }) {
@@ -482,7 +503,7 @@ function TrendingIdeas({ t, state, picked, onPick, onMore }: { t: T; state: Idea
 }
 
 function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
-  return <div className="flex items-center gap-1.5"><span style={{ fontSize: 12, color: t.FAINT, marginRight: 2 }}>{label}</span>
+  return <div className="flex items-center gap-1.5 flex-wrap"><span style={{ fontSize: 12, color: t.FAINT, width: 72, flexShrink: 0 }}>{label}</span>
     {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} aria-pressed={value === v} style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
       background: value === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: value === v ? "#fff" : t.MUTED, boxShadow: value === v ? "none" : t.BTN }}>{l}</button>)}</div>;
 }
