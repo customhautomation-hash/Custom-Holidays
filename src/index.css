@@ -322,3 +322,22 @@ html [role="tab"][data-state="active"] { box-shadow: var(--neu-shadow-sm); borde
 body { font-variant-numeric: tabular-nums; }
 h1 { font-weight: 500; letter-spacing: -0.01em; }
 h2, h3 { font-weight: 500; }
+
+/* Light/dark switch: the new theme spreads like ink (see src/lib/inkTransition.ts) */
+html.ink-switching::view-transition-old(root),
+html.ink-switching::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.ink-switching::view-transition-old(root) { z-index: 1; }
+html.ink-switching::view-transition-new(root) {
+  z-index: 2;
+  -webkit-mask-image: var(--ink-mask);
+  mask-image: var(--ink-mask);
+  -webkit-mask-size: var(--ink-size);
+  mask-size: var(--ink-size);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: 0% 0%;
+  mask-position: 0% 0%;
+}

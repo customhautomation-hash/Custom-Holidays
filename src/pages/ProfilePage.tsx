@@ -165,8 +165,8 @@ export default function ProfilePage() {
           <Card>
             <b style={{ fontSize: 15 }}>Appearance</b>
             <div className="flex gap-3" style={{ marginTop: 12 }}>
-              <Btn kind={!dark ? "primary" : "quiet"} onClick={() => dark && toggle()} style={{ flex: 1 }}>Light</Btn>
-              <Btn kind={dark ? "primary" : "quiet"} onClick={() => !dark && toggle()} style={{ flex: 1 }}>Dark</Btn>
+              <Btn kind={!dark ? "primary" : "quiet"} onClick={e => dark && toggle(e)} style={{ flex: 1 }}>Light</Btn>
+              <Btn kind={dark ? "primary" : "quiet"} onClick={e => !dark && toggle(e)} style={{ flex: 1 }}>Dark</Btn>
             </div>
           </Card>
         </div>

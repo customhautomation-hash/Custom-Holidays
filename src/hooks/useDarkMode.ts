@@ -1,8 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
+import { inkSwitch } from "@/lib/inkTransition";
 
 interface DarkModeContextType {
   dark: boolean;
-  toggle: () => void;
+  /** Pass the click event (or nothing) — the ink spreads from where you clicked. */
+  toggle: (from?: unknown) => void;
 }
 
 export const DarkModeContext = createContext<DarkModeContextType>({
@@ -35,7 +38,19 @@ export function useDarkModeState() {
     } catch {}
   }, [dark]);
 
-  const toggle = () => setDark((d) => !d);
+  const toggle = (from?: unknown) => {
+    const e = from as { clientX?: number; clientY?: number; currentTarget?: Element } | undefined;
+    let at: { x: number; y: number } | undefined;
+    const box = e && typeof e === "object" && e.currentTarget instanceof Element ? e.currentTarget.getBoundingClientRect() : null;
+    if (box) at = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    else if (e && typeof e === "object" && typeof e.clientX === "number" && typeof e.clientY === "number") at = { x: e.clientX, y: e.clientY };
+    const next = !document.documentElement.classList.contains("dark");
+    inkSwitch(() => {
+      // Switch everything right now, so the browser can picture the new theme
+      document.documentElement.classList.toggle("dark", next);
+      flushSync(() => setDark(next));
+    }, at);
+  };
 
   return { dark, toggle };
 }
