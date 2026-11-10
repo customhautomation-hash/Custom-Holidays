@@ -105,6 +105,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     try {
       const n = source === "board" ? boardReady.length : 0;
       const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
+      const oneLine = (x: string) => String(x || "").replace(/\s*(\r?\n|\\n)\s*/g, " / ");   // a line break shows as " / "
+      p.title = oneLine(p.title); p.scenes.forEach((x: any) => { x.on_screen_text = oneLine(x.on_screen_text); });
       setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "", music_tags: p.music_tags || [], music_energy: p.music_energy || (p.format?.pace === "fast" ? "high" : p.format?.pace === "slow" ? "calm" : "medium") });
       if (p.format) {
         setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium", style: p.format.text_style || "classic" });
@@ -258,7 +260,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                 <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
                 <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
               </div></Row>
-              {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip" style={field(t)} /></Row>}
+              {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip (type  /  for a new line)" style={field(t)} /></Row>}
               {clips.map((c, i) => (
                 <div key={c.id} className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}>
                   <div style={{ width: 54, height: 96, borderRadius: 8, overflow: "hidden", flexShrink: 0, boxShadow: t.IN, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -498,6 +500,7 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
   const audio = useRef<HTMLAudioElement | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadNote, setLoadNote] = useState("");
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -508,21 +511,44 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
   useEffect(() => {
     let alive = true;
     if (!clips.length) { setLoaded(null); return; }
-    setLoading(true); setErr("");
+    setLoading(true); setErr(""); setLoadNote("");
     const get = (kind: "image" | "video", src: string) => {
-      if (!cache.current.has(src)) cache.current.set(src, kind === "video" ? loadVideo(src) : loadImage(src));
+      if (!cache.current.has(src)) {
+        const p = kind === "video" ? loadVideo(src) : loadImage(src);
+        p.catch(() => cache.current.delete(src));      // a failed clip is tried again next time
+        cache.current.set(src, p);
+      }
       return cache.current.get(src)!;
     };
     (async () => {
       try {
         await loadReelFonts();
-        const items: Item[] = await Promise.all(clips.map(async c => {
-          if (c.card) return { el: null, kind: "card" as const, seconds: c.seconds, text: c.text };
-          const kind = c.video ? "video" as const : "image" as const;
-          return { el: await get(kind, c.video || srcOf(c.image)), kind, seconds: c.seconds, text: c.text };
-        }));
+        // At most 3 clips load at once, so a long reel's clips don't all fight over the connection.
+        // A clip that won't load is shown black in the preview instead of stopping the whole preview.
+        const items: Item[] = new Array(clips.length);
+        const failed: number[] = [];
+        let next = 0, doneCount = 0;
+        const worker = async () => {
+          while (next < clips.length) {
+            const k = next++, c = clips[k];
+            if (c.card) { items[k] = { el: null, kind: "card", seconds: c.seconds, text: c.text }; doneCount++; continue; }
+            const kind = c.video ? "video" as const : "image" as const;
+            const src = c.video || srcOf(c.image);
+            let el: HTMLImageElement | HTMLVideoElement | null = null;
+            for (let attempt = 0; attempt < 2 && !el; attempt++) { try { el = await get(kind, src); } catch { /* try once more */ } }
+            if (!el) failed.push(k);
+            items[k] = el ? { el, kind, seconds: c.seconds, text: c.text } : { el: null, kind: "card", seconds: c.seconds, text: "" };
+            doneCount++;
+            if (alive) setLoadNote(`Loading clip ${doneCount} of ${clips.length}`);
+          }
+        };
+        await Promise.all([worker(), worker(), worker()]);
         const logo = await loadImage("/ch-mark-peach.png").catch(() => null);
-        if (alive) setLoaded({ items, logo });
+        if (alive) {
+          setLoaded({ items, logo });
+          failed.sort((a, b) => a - b);
+          if (failed.length) setErr(`Clip ${failed.map(k => k + 1).join(", ")} couldn't load, so ${failed.length > 1 ? "they show" : "it shows"} black. Press Swap clip on ${failed.length > 1 ? "them" : "it"}.`);
+        }
       } catch (e: any) { if (alive) setErr(e?.message || "The preview couldn't load"); }
       finally { if (alive) setLoading(false); }
     })();
@@ -569,7 +595,7 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
     <Card pad="18px" className="xl:sticky xl:top-4">
       <div style={{ position: "relative", width: "100%", maxWidth: 340, margin: "0 auto", aspectRatio: `${W} / ${H}`, borderRadius: 16, overflow: "hidden", background: "#0C2C32", boxShadow: t.IN }}>
         <canvas ref={canvas} width={W} height={H} style={{ width: "100%", height: "100%", display: "block" }} onClick={toggle} />
-        {(loading || !L) && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#E6EFEC", fontSize: 13, gap: 8 }}>{clips.length ? <><Loader2 size={16} className="animate-spin" />Loading the preview</> : "The preview appears when the first picture is ready"}</div>}
+        {(loading || !L) && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#E6EFEC", fontSize: 13, gap: 8 }}>{clips.length ? <><Loader2 size={16} className="animate-spin" />{loadNote || "Loading the preview"}</> : "The preview appears when the first picture is ready"}</div>}
       </div>
       <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
         <button onClick={toggle} disabled={!L || progress != null} aria-label={playing ? "Pause" : "Play"} style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: "#13585B", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>

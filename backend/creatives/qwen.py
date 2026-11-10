@@ -289,6 +289,10 @@ Rules:
         })
     if not clean:
         raise Exception("The reel plan came back empty. Please try again")
+    # the hook is the title; don't repeat it as the first clip's words
+    norm = lambda x: re.sub(r"\W+", "", str(x or "").lower())
+    if norm(plan.get("title")) and norm(clean[0]["on_screen_text"]) == norm(plan.get("title")):
+        clean[0]["on_screen_text"] = ""
     # Make the scene lengths add up to the reel length the user chose
     if not clip_count:
         total = sum(c["seconds"] for c in clean) or 1

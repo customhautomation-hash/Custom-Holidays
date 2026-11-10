@@ -35,7 +35,7 @@ export function loadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((res, rej) => {
     const v = document.createElement("video");
     v.crossOrigin = "anonymous"; v.muted = true; v.playsInline = true; v.preload = "auto";
-    const t = setTimeout(() => rej(new Error("A video clip took too long to load")), 30000);
+    const t = setTimeout(() => rej(new Error("A video clip took too long to load")), 60000);
     v.onloadeddata = () => { clearTimeout(t); res(v); };
     v.onerror = () => { clearTimeout(t); rej(new Error("A video clip couldn't be loaded")); };
     v.src = src;
@@ -81,7 +81,7 @@ function drawItem(ctx: CanvasRenderingContext2D, it: Item, idx: number, lt: numb
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const lines: string[] = [];
-  for (const para of text.split(/\n|\\n/)) {          // a line break in the text starts a new line
+  for (const para of text.split(/\n|\\n|\s\/\s/)) {   // a line break (or " / ") starts a new line
     const words = para.split(/\s+/).filter(Boolean); let line = "";
     for (const w of words) { const test = line ? line + " " + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
     if (line) lines.push(line);
