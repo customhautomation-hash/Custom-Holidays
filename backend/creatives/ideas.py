@@ -106,7 +106,10 @@ def gather_trends() -> dict:
 FORMATS = ["slow cinematic destination film", "numbered top-5 list", "day-by-day itinerary", "hotel or villa tour",
            "limited-time offer", "travel tips / things nobody tells you", "fast trend reel with quick cuts",
            "POV reel", "before-you-go checklist", "hidden gems", "budget vs luxury comparison", "festival or event reel",
-           "honeymoon special", "family trip special", "food trail", "myth vs fact"]
+           "honeymoon special", "family trip special", "food trail", "myth vs fact",
+           "pure scenery single shot (just vibes, no talking)", "'bro let's go to X / me: which one?' meme with themed sections",
+           "luxury resort tour with tiny elegant labels", "black chapter cards naming each place, then its shots",
+           "handwritten travel-diary reel with a film look"]
 
 
 def _make_ideas(trends: dict, avoid: list, now: datetime) -> list:

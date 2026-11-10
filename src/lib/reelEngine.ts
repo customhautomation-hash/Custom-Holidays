@@ -7,15 +7,25 @@ import { MusicFit, gainAt, scheduleGain } from "./musicFit";
 
 export const W = 1080, H = 1920, FPS = 30, FADE = 0.45, END = 3;
 
-export type ReelClip = { kind: "image" | "video"; src: string; seconds: number; text: string };
-/** How the words on each clip look. The planner picks these to suit the kind of reel; people can change them. */
-export type TextFormat = { position: "bottom" | "middle" | "top"; font: "serif" | "sans"; size: "small" | "medium" | "large" };
+export type ReelClip = { kind: "image" | "video" | "card"; src: string; seconds: number; text: string };
+/**
+ * How the words look. The planner picks these to suit the kind of reel; people can change them.
+ *  classic: words on a soft shade · label: tiny elegant label (luxury hotel reels) · meme: white words with a
+ *  black outline (trend reels) · handwritten: casual diary · bold: big chunky display words · none: no words
+ */
+export type TextStyle = "classic" | "label" | "meme" | "handwritten" | "bold" | "none";
+export type TextFormat = { position: "bottom" | "middle" | "top"; font: "serif" | "sans"; size: "small" | "medium" | "large"; style?: TextStyle };
 export type Transition = "dissolve" | "slide" | "zoom" | "cut";
-export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number; transition?: Transition };
+/** Colour look over the whole reel */
+export type Grade = "natural" | "warm" | "film" | "moody" | "vibrant" | "dreamy";
+/** full: the picture fills the screen · cinematic: black bars top and bottom */
+export type FrameStyle = "full" | "cinematic";
+export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number; transition?: Transition; grade?: Grade; frame?: FrameStyle };
 export const PACE_FADE = { slow: 0.5, medium: 0.35, fast: 0.2 } as const;
 const SIZES = { serif: { small: 64, medium: 82, large: 104 }, sans: { small: 50, medium: 64, large: 96 } };
 const POS_Y = { top: 0.2, middle: 0.5, bottom: 0.8 };
-export type Item = { el: HTMLImageElement | HTMLVideoElement; kind: "image" | "video"; seconds: number; text: string };
+/** A "card" is a plain dark title card with only words on it (no picture). */
+export type Item = { el: HTMLImageElement | HTMLVideoElement | null; kind: "image" | "video" | "card"; seconds: number; text: string };
 export type Loaded = { items: Item[]; logo: HTMLImageElement | null };
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
@@ -32,9 +42,18 @@ export function loadVideo(src: string): Promise<HTMLVideoElement> {
   });
 }
 
+/** The reel fonts are only downloaded when something asks for them, so ask before drawing. */
+export async function loadReelFonts() {
+  const f = (document as any).fonts;
+  if (!f?.load) return;
+  await Promise.all(["600 40px Caveat", "400 40px Anton", "500 40px \"Cormorant Garamond\"", "600 40px \"Playfair Display\"", "700 40px \"DM Sans\""]
+    .map(x => f.load(x).catch(() => null)));
+  await f.ready;
+}
+
 export async function loadReel(clips: ReelClip[]): Promise<Loaded> {
-  await (document as any).fonts?.ready;
-  const items = await Promise.all(clips.map(async c => ({ el: c.kind === "video" ? await loadVideo(c.src) : await loadImage(c.src), kind: c.kind, seconds: c.seconds, text: c.text })));
+  await loadReelFonts();
+  const items: Item[] = await Promise.all(clips.map(async c => ({ el: c.kind === "card" ? null : c.kind === "video" ? await loadVideo(c.src) : await loadImage(c.src), kind: c.kind, seconds: c.seconds, text: c.text })));
   const logo = await loadImage("/ch-mark-peach.png").catch(() => null);
   return { items, logo };
 }
@@ -48,6 +67,7 @@ function cover(ctx: CanvasRenderingContext2D, el: CanvasImageSource, sw: number,
 }
 
 function drawItem(ctx: CanvasRenderingContext2D, it: Item, idx: number, lt: number) {
+  if (it.kind === "card" || !it.el) { ctx.fillStyle = "#070707"; ctx.fillRect(-W, -H, W * 3, H * 3); return; }
   if (it.kind === "video") {
     const v = it.el as HTMLVideoElement;
     if (v.videoWidth) cover(ctx, v, v.videoWidth, v.videoHeight);
@@ -60,24 +80,94 @@ function drawItem(ctx: CanvasRenderingContext2D, it: Item, idx: number, lt: numb
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean); const lines: string[] = []; let line = "";
-  for (const w of words) { const test = line ? line + " " + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
+  const lines: string[] = [];
+  for (const para of text.split(/\n|\\n/)) {          // a line break in the text starts a new line
+    const words = para.split(/\s+/).filter(Boolean); let line = "";
+    for (const w of words) { const test = line ? line + " " + w : w; if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test; }
+    if (line) lines.push(line);
+  }
+  return lines.slice(0, 4);
 }
 
-function textBlock(ctx: CanvasRenderingContext2D, text: string, font: string, size: number, y: number, alpha: number, color = "#FFFFFF") {
+type TextOpts = { stroke?: number; spacing?: number; shadow?: number; rise?: boolean; maxW?: number; lineH?: number };
+function textBlock(ctx: CanvasRenderingContext2D, text: string, font: string, size: number, y: number, alpha: number, color = "#FFFFFF", o: TextOpts = {}) {
+  if (alpha <= 0.001 || !text) return;
   ctx.save();
   ctx.globalAlpha = alpha; ctx.font = `${font.replace("SIZE", String(size))}`; ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 3;
-  const lines = wrap(ctx, text, W - 160);
-  const rise = (1 - alpha) * 26;   // words drift up gently as they appear
-  lines.forEach((l, i) => ctx.fillText(l, W / 2, y + rise + (i - (lines.length - 1) / 2) * size * 1.18));
+  if (o.spacing) try { (ctx as any).letterSpacing = `${o.spacing}px`; } catch { /* older browsers */ }
+  const lines = wrap(ctx, text, o.maxW ?? W - 160);
+  const rise = o.rise === false ? 0 : (1 - alpha) * 26;   // words drift up gently as they appear
+  const lh = size * (o.lineH ?? 1.18);
+  lines.forEach((l, i) => {
+    const yy = y + rise + (i - (lines.length - 1) / 2) * lh;
+    if (o.stroke) {          // meme style: a thick black outline under white words
+      ctx.lineJoin = "round"; ctx.miterLimit = 2; ctx.strokeStyle = "rgba(0,0,0,.92)"; ctx.lineWidth = o.stroke;
+      ctx.strokeText(l, W / 2, yy);
+    } else { ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = o.shadow ?? 24; ctx.shadowOffsetY = 3; }
+    ctx.fillText(l, W / 2, yy);
+  });
   ctx.restore();
 }
 
 const SERIF = `600 SIZEpx "Playfair Display", Georgia, serif`;
 const SANS = `600 SIZEpx "DM Sans", Inter, system-ui, sans-serif`;
+const HAND = `600 SIZEpx Caveat, "Segoe Print", "Bradley Hand", cursive`;
+const BOLD = `400 SIZEpx Anton, Impact, "Arial Black", sans-serif`;
+const LABEL = `500 SIZEpx "Cormorant Garamond", "Playfair Display", Georgia, serif`;
+const MEME = `700 SIZEpx "DM Sans", Inter, Arial, sans-serif`;
+
+/** Words in any style except classic (classic has its own shade and label layout, below). */
+function styledWords(ctx: CanvasRenderingContext2D, text: string, style: TextStyle, tf: TextFormat, a: number, title = false) {
+  const k = { small: 0, medium: 1, large: 2 }[tf.size] ?? 1;
+  const y = (pos: TextFormat["position"]) => H * POS_Y[pos];
+  if (style === "label") {
+    const size = [40, 50, 64][k] * (title ? 1.5 : 1);
+    textBlock(ctx, text, LABEL, size, y(tf.position), a, "#FFFFFF", { spacing: 2, shadow: 18, rise: false, lineH: 1.45 });
+  } else if (style === "meme") {
+    const size = [52, 62, 76][k];
+    textBlock(ctx, text, MEME, size, title ? H * 0.2 : y(tf.position), a, "#FFFFFF", { stroke: size * 0.16, rise: false, maxW: W - 200, lineH: 1.25 });
+  } else if (style === "handwritten") {
+    const size = [84, 100, 124][k] * (title ? 1.15 : 1);
+    textBlock(ctx, text, HAND, size, y(tf.position), a, "#FFFFFF", { shadow: 14, lineH: 1.05 });
+  } else if (style === "bold") {
+    const size = [96, 124, 156][k] * (title ? 1.1 : 1);
+    textBlock(ctx, text.toUpperCase(), BOLD, size, y(tf.position), a, "#FFFFFF", { spacing: 1, shadow: 30, lineH: 1.05, maxW: W - 120 });
+  }
+}
+
+const FILTERS: Record<Grade, string> = {
+  natural: "none",
+  warm: "sepia(0.2) saturate(1.12) contrast(1.04) brightness(1.02)",
+  film: "sepia(0.14) contrast(1.06) saturate(0.88) brightness(0.98)",
+  moody: "contrast(1.14) saturate(0.82) brightness(0.88)",
+  vibrant: "saturate(1.32) contrast(1.06)",
+  dreamy: "brightness(1.07) saturate(1.06) contrast(0.9)",
+};
+let grainTile: HTMLCanvasElement | null = null;
+/** Film look: fine moving grain and darker corners. */
+function filmOverlay(ctx: CanvasRenderingContext2D, t: number, grade: Grade) {
+  if (grade === "film") {
+    if (!grainTile) {
+      grainTile = document.createElement("canvas"); grainTile.width = grainTile.height = 256;
+      const g = grainTile.getContext("2d")!; const im = g.createImageData(256, 256);
+      for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+      g.putImageData(im, 0, 0);
+    }
+    const pat = ctx.createPattern(grainTile, "repeat");
+    if (pat) {
+      ctx.save(); ctx.globalAlpha = 0.07; ctx.globalCompositeOperation = "overlay";
+      const f = Math.floor(t * 24);           // the grain changes 24 times a second, like film
+      ctx.translate((f * 73) % 256, (f * 151) % 256); ctx.fillStyle = pat; ctx.fillRect(-256, -256, W + 512, H + 512);
+      ctx.restore();
+    }
+  }
+  if (grade === "film" || grade === "moody") {
+    const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, grade === "moody" ? "rgba(0,0,0,.5)" : "rgba(0,0,0,.35)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (grade === "dreamy") { ctx.fillStyle = "rgba(255,248,240,.07)"; ctx.fillRect(0, 0, W, H); }
+}
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const easeIO = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 
@@ -100,6 +190,8 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
   if (i < items.length) {
     const lt = t - start;
     const tr = look.transition || "dissolve";
+    const grade = look.grade || "natural";
+    ctx.filter = FILTERS[grade] || "none";          // the colour look applies to the pictures only, not the words
     if (i > 0 && lt < fade && tr !== "cut") {
       const e = easeIO(lt / fade), prev = () => drawItem(ctx, items[i - 1], i - 1, items[i - 1].seconds + lt), cur = () => drawItem(ctx, items[i], i, lt);
       if (tr === "slide") {          // the new clip pushes the old one up
@@ -113,35 +205,63 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
         withTransform(ctx, 1, 0, 0, e, cur);
       }
     } else drawItem(ctx, items[i], i, lt);
+    ctx.filter = "none";
+    filmOverlay(ctx, t, grade);
+    if (look.frame === "cinematic") {               // letterbox: black bars top and bottom
+      const bar = Math.round(H * 0.17);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+    }
 
     const it = items[i];
-    const showTitle = look.showTitle && i === 0 && look.title && lt < Math.min(it.seconds, 3.4);
-    const showText = look.showText && it.text && !showTitle;
     const tf: TextFormat = look.text || { position: "bottom", font: "sans", size: "medium" };
-    const shadeTop = showTitle || (showText && tf.position === "top");
-    if (showText && !showTitle && tf.position === "middle") {
-      ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
-    } else if (showTitle || showText) {
-      const g = ctx.createLinearGradient(0, shadeTop ? 0 : H * 0.55, 0, shadeTop ? H * 0.5 : H);
-      g.addColorStop(0, shadeTop ? "rgba(0,0,0,.42)" : "rgba(0,0,0,0)");
-      g.addColorStop(1, shadeTop ? "rgba(0,0,0,0)" : "rgba(0,0,0,.5)");
-      ctx.fillStyle = g; ctx.fillRect(0, shadeTop ? 0 : H * 0.55, W, H * 0.5);
-    }
-    if (showTitle) {
-      const a = Math.min(ease((lt - 0.2) / 0.5), ease((Math.min(it.seconds, 3.4) - lt) / 0.4));
-      textBlock(ctx, look.title, SERIF, 96, H * 0.24, a);
-    } else if (showText) {
-      const a = Math.min(ease((lt - 0.2) / 0.4), ease((it.seconds - lt) / 0.3));
-      const size = SIZES[tf.font][tf.size];
-      const font = tf.font === "serif" ? SERIF : tf.size === "large" ? SANS.replace("600", "800") : SANS;
-      const y = H * POS_Y[tf.position];
-      const parts = it.text.split(/\s+[·|]\s+/);
-      if (parts.length > 1) {
-        ctx.font = font.replace("SIZE", String(size));
-        const lines = Math.min(2, Math.ceil(ctx.measureText(parts.slice(1).join(" · ")).width / (W - 160)) || 1);
-        textBlock(ctx, parts[0], SANS, 46, y - size * (0.55 + 0.3 * lines), a, "#D4AF5A");
-        textBlock(ctx, parts.slice(1).join(" · "), font, size, y, a);
-      } else textBlock(ctx, it.text, font, size, y, a);
+    const style: TextStyle = tf.style || "classic";
+    // A meme-style hook stays for the whole first clip; other titles for up to 3.4 seconds
+    const titleLen = style === "meme" ? it.seconds : Math.min(it.seconds, 3.4);
+    const showTitle = look.showTitle && i === 0 && !!look.title && lt < titleLen && it.kind !== "card";
+    const card = it.kind === "card";
+    const words = card ? it.text : look.showText && !showTitle && style !== "none" ? it.text : "";
+    // The same words on neighbouring clips stay on screen, without fading out and in again between them
+    const titled0 = look.showTitle && !!look.title;
+    const same = (j: number) => j >= 0 && j < items.length && !!it.text && items[j].text === it.text && items[j].kind === it.kind && !(j === 0 && titled0);
+    const aIn = i > 0 && same(i - 1) ? 1 : ease((lt - (card ? 0.25 : 0.15)) / (card ? 0.5 : 0.35));
+    const aOut = same(i + 1) ? 1 : ease((it.seconds - lt) / (card ? 0.4 : 0.3));
+
+    if (card) {
+      styledWords(ctx, words, "label", { ...tf, position: "middle", size: tf.size === "large" ? "large" : "medium" }, Math.min(aIn, aOut));
+    } else if (style !== "classic") {
+      if (showTitle) styledWords(ctx, look.title, style === "none" ? "label" : style, tf, Math.min(ease((lt - 0.15) / 0.45), ease((titleLen - lt) / 0.35)), true);
+      else if (words) styledWords(ctx, words, style, tf, Math.min(aIn, aOut));
+    } else {
+      const showText = !!words;
+      const shadeTop = showTitle || (showText && tf.position === "top");
+      // the shade under the words fades with them, so it doesn't flash between clips with the same words
+      const sa = showTitle ? 1 : Math.max(0.0001, Math.min(1, Math.min(aIn, aOut) * 1.6));
+      ctx.save(); ctx.globalAlpha = sa;
+      if (showText && !showTitle && tf.position === "middle") {
+        ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
+      } else if (showTitle || showText) {
+        const g = ctx.createLinearGradient(0, shadeTop ? 0 : H * 0.55, 0, shadeTop ? H * 0.5 : H);
+        g.addColorStop(0, shadeTop ? "rgba(0,0,0,.42)" : "rgba(0,0,0,0)");
+        g.addColorStop(1, shadeTop ? "rgba(0,0,0,0)" : "rgba(0,0,0,.5)");
+        ctx.fillStyle = g; ctx.fillRect(0, shadeTop ? 0 : H * 0.55, W, H * 0.5);
+      }
+      ctx.restore();
+      if (showTitle) {
+        const a = Math.min(ease((lt - 0.2) / 0.5), ease((titleLen - lt) / 0.4));
+        textBlock(ctx, look.title, SERIF, 96, H * 0.24, a);
+      } else if (showText) {
+        const a = Math.min(aIn, aOut);
+        const size = SIZES[tf.font][tf.size];
+        const font = tf.font === "serif" ? SERIF : tf.size === "large" ? SANS.replace("600", "800") : SANS;
+        const y = H * POS_Y[tf.position];
+        const parts = it.text.split(/\s+[·|]\s+/);
+        if (parts.length > 1) {
+          ctx.font = font.replace("SIZE", String(size));
+          const lines = Math.min(2, Math.ceil(ctx.measureText(parts.slice(1).join(" · ")).width / (W - 160)) || 1);
+          textBlock(ctx, parts[0], SANS, 46, y - size * (0.55 + 0.3 * lines), a, "#D4AF5A");
+          textBlock(ctx, parts.slice(1).join(" · "), font, size, y, a);
+        } else textBlock(ctx, it.text, font, size, y, a);
+      }
     }
   } else if (look.endCard) {
     const lt = t - clipsEnd;
@@ -156,7 +276,7 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
     if (look.endSub) textBlock(ctx, look.endSub, SANS, 40, H * 0.64, a, "#D4AF5A");
   }
 
-  if (look.showLogo && L.logo && i < items.length) {
+  if (look.showLogo && L.logo && i < items.length && items[i].kind !== "card") {
     ctx.save(); ctx.globalAlpha = 0.9; ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 16;
     ctx.drawImage(L.logo, W - 150, 70, 90, 90); ctx.restore();
   }

@@ -147,6 +147,9 @@ FORMAT_CHOICES = {
     "text_font": ("serif", "sans"),
     "text_size": ("small", "medium", "large"),
     "pace": ("slow", "medium", "fast"),
+    "text_style": ("classic", "label", "meme", "handwritten", "bold", "none"),
+    "grade": ("natural", "warm", "film", "moody", "vibrant", "dreamy"),
+    "frame": ("full", "cinematic"),
 }
 
 
@@ -161,17 +164,32 @@ def plan_reel(brief: str, seconds: int = 30, clip_count: int = 0, style: str = "
     body = seconds - 3
     count_rule = (f"Exactly {clip_count} scenes (the user's own clips, in this order)." if clip_count
                   else f"Pick the number of scenes for the kind of reel: about {max(4, round(body / 3.8))} for a calm reel, "
-                       f"about {max(5, round(body / 2.8))} for a lively one, up to {min(16, round(body / 1.7))} for a fast one.")
+                       f"about {max(5, round(body / 2.8))} for a lively one, up to {min(24, round(body / 1.1))} for a fast trend reel, "
+                       f"and just 1-3 for a pure scenery reel.")
     prompt = f"""
 You are the head of social media at Custom Holidays, a luxury travel company in Mumbai, and an experienced
 short-form video editor. Plan a {seconds}-second vertical Instagram reel (9:16) for this request:
 
 "{brief}"
 
-STEP 1. Work out what KIND of reel this is, in the user's own terms (a slow destination film, a numbered
-top list, a day-by-day itinerary, a hotel tour, an offer, travel tips, "things nobody tells you", a fast
-trend reel, a before-and-after, or anything else), and follow exactly what the request asks for: its places,
-order, number of items, mood and ending.
+STEP 1. Work out what KIND of reel this is, in the user's own terms, and follow exactly what the request asks
+for: its places, order, number of items, mood and ending. Reels are NOT always many clips stitched together.
+Some kinds and how to build them (use these as patterns, or invent the right structure for something new):
+- Pure scenery / "just vibes": 1 to 3 long shots (8-30 s each) of one breathtaking view, little or no text,
+  text_style "none" or "label", no title, slow, transition dissolve. A single POV shot is just 1 scene.
+- Luxury hotel / resort tour: 6-10 calm shots, each with a tiny elegant label ("The pool", "The suite",
+  "The sunset"), text_style "label", position middle, no title, grade "warm", slow.
+- Trend / meme hook ("bro let's go to Japan" / "me: which one?"): a hook title on the first scene in
+  text_style "meme" (use \n between the two lines), then SECTIONS: several fast clips per section, each
+  section named ("Cyberpunk Tokyo", "Ancient Kyoto", "Luxurious Japan"); repeat the SAME on_screen_text on
+  every clip of a section so it stays on screen; text_style "bold" or "meme"; cuts on the beat; pace fast.
+- Chapter cards (calm, cinematic): a black title card naming each place ("和歌山\nWakayama, Japan",
+  local script on the first line if the place has one), then 1-3 shots of that place, and so on.
+  Use scene "type": "card" for the black cards (no picture needed), text_style "label", grade "film".
+- Travel diary: handheld-feeling quick cuts with one short handwritten line that stays across several clips
+  (repeat the same on_screen_text), text_style "handwritten", grade "film", frame "cinematic".
+- Classic destination film, numbered top list, day-by-day itinerary, offer, tips: as before, text_style
+  "classic".
 
 STEP 2. Edit it like a professional:
 - HOOK: the first scene is the single most striking image, and the title is a scroll-stopping hook.
@@ -181,7 +199,10 @@ STEP 2. Edit it like a professional:
   Never show the same place twice in a row. Keep one consistent light and colour mood across scenes.
 - TEXT: specific and useful (real names, numbers, what you'll feel or do). Never generic ("Beautiful
   views", "Amazing place"). Never repeat the title. Max 8 words, no emojis, no hashtags.
-- TIMING: calm reels 3-5 s per scene, lively 2-3 s, fast 1.2-2 s. Scenes with more text get more time.
+- TIMING: calm reels 3-5 s per scene, lively 2-3 s, fast 0.8-2 s, single scenery shots 8-30 s, cards 1.5-2.5 s.
+  Scenes with more text get more time.
+- TEXT THAT STAYS: to keep the same words on screen over several clips, give those scenes exactly the
+  same on_screen_text. Leave on_screen_text empty when a scene should have no words.
 
 STEP 3. For every scene write a stock-footage search ("photo_query") that a site like Pexels can match:
 2-4 plain words naming the real landmark or subject and place (e.g. "Fushimi Inari torii",
@@ -198,10 +219,16 @@ Return ONLY a valid JSON object. No markdown, no explanation.
     "text_font": "serif (elegant) | sans (modern, punchy)",
     "text_size": "small | medium | large",
     "pace": "slow | medium | fast",
-    "transition": "dissolve (soft, calm) | slide (smooth, modern) | zoom (energetic) | cut (fast, trendy)"
+    "transition": "dissolve (soft, calm) | slide (smooth, modern) | zoom (energetic) | cut (fast, trendy)",
+    "text_style": "classic (words on a soft shade) | label (tiny elegant label, luxury) | meme (white words with a black outline, trend/meme) | handwritten (casual diary) | bold (big chunky display words) | none",
+    "grade": "natural | warm (golden) | film (soft, grainy, nostalgic) | moody (dark, rich) | vibrant | dreamy (soft, bright)",
+    "frame": "full | cinematic (black bars top and bottom)",
+    "end_card": true,
+    "logo": true
   }},
   "scenes": [
     {{
+      "type": "shot | card (a black title card with only words, no picture)",
       "image_prompt": "photographic description of the shot: exact real place, time of day, light, lens, colours. NO people, NO faces, NO text in the image",
       "video_prompt": "Animate: subtle natural motion only, 1-2 sentences",
       "photo_query": "2-4 words",
@@ -222,6 +249,7 @@ Return ONLY a valid JSON object. No markdown, no explanation.
 
 Rules:
 - {count_rule} Scene seconds add up to about {body} (the end card adds 3 seconds).
+  (A pure scenery reel may use just 1-3 scenes; a fast trend reel up to 24.)
 - Use ONLY prices, dates, hotel names and inclusions that appear in the request. Never invent prices or offers.
 - 8 to 14 hashtags, mixing destination and luxury-travel tags.
 """
@@ -240,20 +268,24 @@ Rules:
     if plan is None:
         raise Exception("The reel plan couldn't be read. Please try again")
     clean = []
-    for s in (plan.get("scenes") or [])[:16]:
-        if not isinstance(s, dict) or not s.get("image_prompt"):
+    for s in (plan.get("scenes") or [])[:24]:
+        if not isinstance(s, dict):
+            continue
+        card = str(s.get("type") or "").strip().lower() == "card"
+        if not card and not s.get("image_prompt"):
             continue
         try:
             sec = float(s.get("seconds") or 3)
         except (TypeError, ValueError):
             sec = 3.0
         clean.append({
-            "image_prompt": str(s["image_prompt"]).strip(),
+            "type": "card" if card else "shot",
+            "image_prompt": str(s.get("image_prompt") or "").strip(),
             "video_prompt": str(s.get("video_prompt") or "Animate: very slow camera push forward.").strip(),
             "on_screen_text": str(s.get("on_screen_text") or "").strip(),
             "photo_query": str(s.get("photo_query") or "").strip(),
             "photo_query_alt": str(s.get("photo_query_alt") or "").strip(),
-            "seconds": max(1.0, min(sec, 8.0)),
+            "seconds": max(0.6, min(sec, 40.0)),
         })
     if not clean:
         raise Exception("The reel plan came back empty. Please try again")
@@ -263,10 +295,14 @@ Rules:
         k = (seconds - 3) / total
         if abs(k - 1) > 0.08:
             for c in clean:
-                c["seconds"] = round(max(1.0, min(8.0, c["seconds"] * k)), 2)
+                c["seconds"] = round(max(0.6, min(40.0, c["seconds"] * k)), 2)
     fmt = plan.get("format") if isinstance(plan.get("format"), dict) else {}
     fmt = {k: (str(fmt.get(k, "")).split()[0].lower() if fmt.get(k) else "") for k in FORMAT_CHOICES}
     fmt = {k: (v if v in FORMAT_CHOICES[k] else FORMAT_CHOICES[k][0 if k != "text_size" else 1]) for k, v in fmt.items()}
+    raw_fmt = plan.get("format") if isinstance(plan.get("format"), dict) else {}
+    for k in ("end_card", "logo"):
+        v = raw_fmt.get(k, True)
+        fmt[k] = v if isinstance(v, bool) else str(v).strip().lower() not in ("false", "no", "0")
     tags = plan.get("hashtags") or []
     if isinstance(tags, str):
         tags = tags.split()
