@@ -305,7 +305,7 @@ export const COMPANY: HelpSection[] = [
     intro: "The keys that connect the services live in two places. Never paste them into chat, email or the code.",
     points: [
       { label: "Vercel → Settings → Environment Variables", text: "VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_URL, VITE_GOOGLE_CLIENT_ID." },
-      { label: "Render → Environment", text: "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REDIRECT_URI, OPENROUTER_API_KEY, GEMINI_API_KEY, PEXELS_API_KEY, COMFY_URL, COMFY_KEY, FRONTEND_URL and the other AI keys." },
+      { label: "Render → Environment", text: "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_REDIRECT_URI, OPENROUTER_API_KEY, GEMINI_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, COMFY_URL, COMFY_KEY, FRONTEND_URL and the other AI keys." },
     ],
     tips: [
       "The Supabase service role key gives full access to the database. It belongs only in Render, never in Vercel.",
@@ -349,6 +349,7 @@ export const COMPANY: HelpSection[] = [
       { label: "Team Chat, Vouchers, Desktop alerts", text: "Run three files in Supabase → SQL Editor: supabase/team_chat.sql, supabase/vouchers.sql and supabase/push_notifications.sql. Then deploy the push-notify function with JWT verification turned off." },
       { label: "Gmail and Drive for everyone", text: "In Google Cloud (project 'automation'): finish Branding, add the Gmail and Drive scopes, click Publish app, and put the client ID and secret into Render and Vercel." },
       { label: "Real photos and video clips in reels", text: "Create a free account at pexels.com/api, copy the API key and add it on Render as PEXELS_API_KEY. Without it, real photos come from Openverse (fewer and slower) and real video clips are off." },
+      { label: "Better music for reels", text: "Create a free developer account at devportal.jamendo.com, make an app (any name, e.g. Custom Holidays reels), copy its Client ID and add it on Render as JAMENDO_CLIENT_ID. The reel maker then searches Jamendo's whole library for instrumental tracks that match each reel's genre, mood and tempo, most popular first, and only uses tracks whose licence allows business use (CC BY or CC0). Without it, music comes from Openverse, which has fewer and weaker tracks." },
       { label: "Videos on the Creatives page", text: "Connect the main PC that runs ComfyUI. See Video studio on the main PC above." },
       { label: "Finance figures from Tally", text: "Run supabase/finance_tally.sql in Supabase → SQL Editor. Then open Finance KPIs, click Download Tally Connector and follow the steps on the computer that has Tally." },
       { label: "Gmail checked every 5 minutes", text: "Run supabase/gmail_auto_check.sql in Supabase → SQL Editor. Until then, Gmail is only checked while someone has the Suppliers page open." },

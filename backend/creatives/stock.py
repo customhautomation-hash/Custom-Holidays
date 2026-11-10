@@ -126,7 +126,13 @@ def _openverse_photos(query: str) -> list:
     return out
 
 
-def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", exclude: list | None = None, seconds: float = 0) -> dict:
+def _creator(credit: str) -> str:
+    m = _re.match(r"(?:Photo|Video): (.+?)(?: on Pexels| \(| via |$)", credit or "")
+    return (m.group(1) if m else "").strip().lower()
+
+
+def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", exclude: list | None = None, seconds: float = 0,
+               avoid_credits: list | None = None) -> dict:
     """Finds the best real photo (or video clip) for a scene: it must show what was searched for, be
     vertical and sharp, (for clips) last long enough, and not already be used elsewhere in the reel.
     `pick` steps through the next-best ones for Swap clip. The file is copied to our storage."""
@@ -134,6 +140,7 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
     if not query:
         raise Exception("Nothing to search for")
     exclude = set(exclude or [])
+    avoid = {_creator(c) for c in (avoid_credits or [])} - {""}
     searches = [q for q in dict.fromkeys([query, (alt or "").strip(), " ".join(query.split()[:2])]) if q]
     pool, seen, source = [], set(), ""
     for q in searches:
@@ -154,6 +161,8 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
                 continue
             seen.add(it["id"])
             it["score"] = _score(it, query, seconds) - (0.8 if q != query else 0)   # backups rank a little lower
+            if _creator(it["credit"]) and _creator(it["credit"]) in avoid:          # same person, often the same shoot
+                it["score"] -= 2.5
             pool.append(it)
         if len([p for p in pool if p["score"] >= 4]) >= 6:
             break
@@ -181,29 +190,96 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
 
 # ── Music ─────────────────────────────────────────────────────────────────
 
-def find_music(query: str, min_seconds: int = 0) -> list:
-    """Creative Commons music (CC0 / CC BY, safe for business use) matching a mood, longest-fitting first."""
-    tracks = []
-    for q in [query, " ".join((query or "").split()[:1])]:
+JAMENDO_ID = os.getenv("JAMENDO_CLIENT_ID", "")
+_SPEED = {"calm": "verylow low", "medium": "medium", "high": "high veryhigh"}   # Jamendo takes space-separated values
+_JUNK = ("loop", "sfx", "sound effect", "jingle", "ringtone", "intro", "stinger", "demo", "test")
+
+
+def _business_ok(url: str) -> str:
+    """'CC0' or 'CC BY' when a Jamendo/CC licence allows business use in a video, else ''."""
+    u = (url or "").lower()
+    if "publicdomain" in u or "/zero/" in u:
+        return "CC0"
+    if "/by/" in u:                       # not -nc (no business use), -nd (no edits) or -sa (share-alike)
+        return "CC BY"
+    return ""
+
+
+def _jamendo(tags: list, energy: str, min_seconds: int, page: int) -> list:
+    base = {"client_id": JAMENDO_ID, "format": "json", "limit": 50, "offset": page * 50, "include": "musicinfo licenses",
+            "audioformat": "mp32", "order": "popularity_total", "vocalinstrumental": "instrumental",
+            "durationbetween": f"{max(20, min_seconds)}_400"}
+    attempts = [dict(fuzzytags=" ".join(tags[:4]), speed=_SPEED.get(energy, "")), dict(fuzzytags=" ".join(tags[:2])), dict(tags=tags[0] if tags else "")]
+    out = []
+    for extra in attempts:
+        params = {**base, **{k: v for k, v in extra.items() if v}}
+        r = requests.get("https://api.jamendo.com/v3.0/tracks/", params=params, timeout=20)
+        r.raise_for_status()
+        for n, x in enumerate(r.json().get("results", [])):
+            lic = _business_ok(x.get("license_ccurl", ""))
+            if not lic or not x.get("audio") or any(t["id"] == f"jam-{x['id']}" for t in out):
+                continue
+            mi = x.get("musicinfo") or {}
+            tg = mi.get("tags") or {}
+            words = set((tg.get("genres") or []) + (tg.get("vartags") or []) + (tg.get("instruments") or []))
+            out.append({"id": f"jam-{x['id']}", "title": x.get("name") or "Untitled", "creator": x.get("artist_name") or "unknown",
+                        "seconds": int(x.get("duration") or 0), "license": lic, "url": x["audio"], "link": x.get("shareurl", ""),
+                        "tags": sorted(words), "rank": n, "speed": mi.get("speed", ""),
+                        "credit": f"Music: \"{x.get('name') or 'Untitled'}\" by {x.get('artist_name') or 'unknown'}" + ("" if lic == "CC0" else " (CC BY) via Jamendo")})
+        if len(out) >= 12:
+            break
+    return out
+
+
+def _openverse_music(tags: list, query: str) -> list:
+    out = []
+    for q in list(dict.fromkeys([" ".join(tags[:2]), *(tags[:3]), query]))[:4]:
         if not q:
             continue
         r = requests.get(f"{OPENVERSE}/audio/", headers=UA, timeout=25,
-                         params={"q": q, "license": "cc0,by", "category": "music", "page_size": 20})
+                         params={"q": q, "license": "cc0,by", "category": "music", "page_size": 30})
         r.raise_for_status()
-        for x in r.json().get("results", []):
-            if not x.get("url") or any(t["id"] == x["id"] for t in tracks):
+        for n, x in enumerate(r.json().get("results", [])):
+            if not x.get("url") or any(t["id"] == x["id"] for t in out):
                 continue
-            secs = round((x.get("duration") or 0) / 1000)
             lic = (x.get("license") or "").upper()
-            tracks.append({
-                "id": x["id"], "title": x.get("title") or "Untitled", "creator": x.get("creator") or "unknown",
-                "seconds": secs, "license": "CC0" if lic == "CC0" else f"CC BY {x.get('license_version') or ''}".strip(),
-                "url": x["url"], "link": x.get("foreign_landing_url", ""),
-                "credit": f"Music: \"{x.get('title') or 'Untitled'}\" by {x.get('creator') or 'unknown'}" + ("" if lic == "CC0" else f" (CC BY {x.get('license_version') or ''})".replace(" )", ")")),
-            })
-        if len(tracks) >= 6:
-            break
-    tracks.sort(key=lambda t: (t["seconds"] < min_seconds, abs(t["seconds"] - max(min_seconds, 60))))
+            words = {str(t.get("name", "")).lower() for t in (x.get("tags") or [])} | {str(g).lower() for g in (x.get("genres") or [])}
+            out.append({"id": x["id"], "title": x.get("title") or "Untitled", "creator": x.get("creator") or "unknown",
+                        "seconds": round((x.get("duration") or 0) / 1000), "license": "CC0" if lic == "CC0" else "CC BY",
+                        "url": x["url"], "link": x.get("foreign_landing_url", ""), "tags": sorted(w for w in words if w)[:12], "rank": n,
+                        "credit": f"Music: \"{x.get('title') or 'Untitled'}\" by {x.get('creator') or 'unknown'}" + ("" if lic == "CC0" else f" (CC BY {x.get('license_version') or ''})".replace(" )", ")"))})
+    return out
+
+
+def find_music(query: str, min_seconds: int = 0, tags: list | None = None, energy: str = "", page: int = 0) -> list:
+    """Music that fits the reel's vibe (CC0 / CC BY only, safe for business use).
+    With a free Jamendo key it searches Jamendo directly: instrumental tracks, by genre/mood tags and tempo,
+    most popular first (the best-produced tracks). Otherwise Openverse. Every track is then scored on how many
+    of the wanted tags it really has, the right tempo, being long enough, and not being a jingle or loop."""
+    tags = [t for t in (tags or []) if t] or [w for w in _re.findall(r"[a-z]+", (query or "").lower()) if w not in _STOP][:4] or ["cinematic"]
+    tracks = []
+    if JAMENDO_ID:
+        try:
+            tracks = _jamendo(tags, energy, min_seconds, page)
+        except Exception as e:
+            print("Jamendo failed:", e)
+    if len(tracks) < 5:
+        tracks += [t for t in _openverse_music(tags, query) if t["id"] not in {x["id"] for x in tracks}]
+    want = set(tags)
+    for t in tracks:
+        have = set(t.get("tags") or []) | _words(t["title"])
+        t["matches"] = sorted(want & have)
+        fits = 1.0 if t["seconds"] >= min_seconds else 0.3
+        junk = any(j in t["title"].lower() for j in _JUNK) or t["seconds"] < 20
+        tempo = 0.0
+        if energy and t.get("speed"):
+            tempo = 1.0 if t["speed"] in _SPEED.get(energy, "").split() else -0.5
+        t["score"] = len(t["matches"]) * 2 + fits * 2 + tempo - t.get("rank", 0) * 0.03 - (4 if junk else 0)
+    tracks.sort(key=lambda t: -t["score"])
+    if not JAMENDO_ID and page:
+        tracks = tracks[page * 12:] or tracks
+    for t in tracks:
+        t.pop("rank", None); t.pop("score", None)
     return tracks[:12]
 
 

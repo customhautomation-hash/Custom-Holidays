@@ -440,6 +440,7 @@ class StockRequest(BaseModel):
     alt: str = ""
     exclude: list = []
     seconds: float = 0
+    avoid_credits: list = []
 
 
 @router.post("/reel/stock")
@@ -447,20 +448,21 @@ def reel_stock(req: StockRequest):
     """A real photo or video clip for a reel scene (Pexels, or Openverse for photos without a key)."""
     from creatives.stock import find_stock
     try:
-        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds)}
+        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds, req.avoid_credits)}
     except Exception as e:
         # 422, not 502: a 502 looks like "the server is asleep" to the browser, which then keeps retrying
         raise HTTPException(status_code=404 if "found" in str(e) else 422, detail=str(e))
 
 
 @router.get("/reel/music")
-def reel_music(q: str = "calm cinematic", seconds: int = 30):
-    """Free Creative Commons music for a mood (CC0 / CC BY)."""
-    from creatives.stock import find_music
+def reel_music(q: str = "calm cinematic", seconds: int = 30, tags: str = "", energy: str = "", page: int = 0):
+    """Free Creative Commons music that fits the reel (CC0 / CC BY). tags: comma-separated, energy: calm/medium/high."""
+    from creatives.stock import find_music, JAMENDO_ID
     try:
-        return {"success": True, "tracks": find_music(q, seconds)}
+        tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+        return {"success": True, "tracks": find_music(q, seconds, tag_list, energy, page), "source": "jamendo" if JAMENDO_ID else "openverse"}
     except Exception as e:
-        raise HTTPException(status_code=502, detail="The music library didn't answer. Try again in a minute")
+        raise HTTPException(status_code=422, detail="The music library didn't answer. Try again in a minute")
 
 
 class MusicFetchRequest(BaseModel):
@@ -474,7 +476,7 @@ def reel_music_use(req: MusicFetchRequest):
     try:
         return {"success": True, "url": fetch_music(req.url)}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e) or "The track couldn't be loaded")
+        raise HTTPException(status_code=422, detail=str(e) or "The track couldn't be loaded")
 
 
 @router.post("/stop-generation")

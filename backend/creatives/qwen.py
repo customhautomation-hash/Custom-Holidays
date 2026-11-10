@@ -215,7 +215,9 @@ Return ONLY a valid JSON object. No markdown, no explanation.
   "caption": "Instagram caption, 2-4 short lines, warm and refined, one call to action to message us",
   "hashtags": ["#luxurytravel", "..."],
   "music_mood": "e.g. calm piano, warm acoustic, upbeat electronic",
-  "music_query": "1-2 plain genre words for a music library: piano, ambient, acoustic, chill, cinematic, electronic, lounge, jazz, world"
+  "music_query": "1-2 plain genre words for a music library: piano, ambient, acoustic, chill, cinematic, electronic, lounge, jazz, world",
+  "music_tags": ["3-5 single-word music library tags that fit THIS reel's place and mood: one genre (cinematic, ambient, lounge, deephouse, acoustic, pop, electronic, orchestral, jazz, world, chillout, tropical), one or two moods (uplifting, romantic, dreamy, energetic, happy, epic, peaceful, festive, inspiring), optionally an instrument or local flavour (piano, guitar, strings, oud, sitar, koto, ukulele)"],
+  "music_energy": "calm | medium | high, matching the pace and the feeling of the reel"
 }}
 
 Rules:
@@ -279,4 +281,7 @@ Rules:
         "hashtags": [("#" + str(t).lstrip("#")).strip() for t in tags if str(t).strip()][:20],
         "music_mood": str(plan.get("music_mood") or "").strip(),
         "music_query": str(plan.get("music_query") or "").strip(),
+        "music_tags": [re.sub(r"[^a-z]", "", str(x).lower()) for x in (plan.get("music_tags") or []) if re.sub(r"[^a-z]", "", str(x).lower())][:5]
+                      if isinstance(plan.get("music_tags"), list) else [],
+        "music_energy": str(plan.get("music_energy") or "").strip().lower() if str(plan.get("music_energy") or "").strip().lower() in ("calm", "medium", "high") else "",
     }

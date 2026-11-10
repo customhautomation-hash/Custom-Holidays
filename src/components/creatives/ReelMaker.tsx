@@ -17,9 +17,9 @@ import { W, H, END, ReelLook, TextFormat, Transition, PACE_FADE, Loaded, Item, R
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
 type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals; alt?: string; ref?: string };
-type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string };
+type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string; matches?: string[] };
 type Visuals = "ai" | "photo" | "video";
-type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string };
+type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string; music_tags: string[]; music_energy: string };
 
 /** Ideas to start from. They only fill in the brief: any kind of reel can be typed. */
 type Idea = { label: string; brief: string; why?: string };
@@ -103,7 +103,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     try {
       const n = source === "board" ? boardReady.length : 0;
       const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
-      setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "" });
+      setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "", music_tags: p.music_tags || [], music_energy: p.music_energy || (p.format?.pace === "fast" ? "high" : p.format?.pace === "slow" ? "calm" : "medium") });
       if (p.format) { setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium" }); setPace(p.format.pace || "slow"); setTransition(p.format.transition || "dissolve"); }
       if (p.end_sub) setEndSub(p.end_sub);
       if (source === "board") {
@@ -117,7 +117,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
         if (cancel.current) return;
         setBusy(`${visuals === "ai" ? "Making picture" : visuals === "video" ? "Finding a real video clip" : "Finding a real photo"} ${i + 1} of ${list.length}`);
         upd(list[i].id, { status: "picture" });
-        const got = await getVisual(list[i], visuals, 0);
+        const got = await getVisual(list[i], visuals, 0, list);
         Object.assign(list[i], got);
         upd(list[i].id, got);
       }
@@ -138,7 +138,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const stop = () => { cancel.current = true; setBusy(""); aborts.current.forEach(a => a.abort()); aborts.current.clear(); stopOnServer(undefined, "ltx23.json"); setClips(l => l.map(c => (c.status === "picture" || c.status === "video" ? { ...c, status: c.image ? "ready" : "error" } : c))); };
 
   /** A picture or clip for one scene: real photo / real video clip (falls back to an AI picture), or an AI picture. */
-  const getVisual = async (c: Clip, kind: Visuals, pick: number): Promise<Partial<Clip>> => {
+  const getVisual = async (c: Clip, kind: Visuals, pick: number, others: Clip[] = clipsRef.current): Promise<Partial<Clip>> => {
     const ctl = new AbortController(); aborts.current.add(ctl);
     const opts = { signal: ctl.signal };
     const aiPicture = async (note: string): Promise<Partial<Clip>> => {
@@ -152,8 +152,11 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
       if (kind !== "ai") {
         try {
           // Don't reuse a photo or clip that's already in this reel
-          const used = clipsRef.current.filter(x => x.id !== c.id && x.ref).map(x => x.ref!);
-          const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, seconds: c.seconds },
+          // (the list being made is passed in, because the screen may not have caught up with the last clip yet)
+          const rest = others.filter(x => x.id !== c.id);
+          const used = rest.filter(x => x.ref).map(x => x.ref!);
+          const credits = rest.filter(x => x.credit).map(x => x.credit);
+          const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, avoid_credits: credits, seconds: c.seconds },
             { ...opts, limit: kind === "video" ? 90_000 : 60_000 });
           const p = typeof d.pick === "number" ? d.pick : pick;
           return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" };
@@ -272,7 +275,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">
                 <input value={plan?.end_line || ""} onChange={e => setPlan(p => p && { ...p, end_line: e.target.value })} placeholder="Closing line" style={field(t)} />
                 <input value={endSub} onChange={e => setEndSub(e.target.value)} placeholder="Website or phone, e.g. +91 98200 00000" style={field(t)} /></div></Row>}
-              {opt.music && <Row t={t} label="Music"><MusicPicker t={t} query={plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
+              {opt.music && <Row t={t} label="Music"><MusicPicker t={t} tags={plan?.music_tags || []} energy={plan?.music_energy || (pace === "fast" ? "high" : pace === "slow" ? "calm" : "medium")} query={plan?.music_tags?.length ? plan.music_tags.join(" ") : plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
                 onPick={(f, credit) => { setMusic(f); setMusicCredit(credit); }} volume={volume} setVolume={setVolume} /></Row>}
               {opt.music && music && <Row t={t} label="Timing"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
                 {!track ? <Muted>Reading the beat…</Muted> : <>
@@ -338,7 +341,7 @@ function SwapRow({ t, c, kind, busy, onSwap }: { t: T; c: Clip; kind: Visuals; b
 }
 
 /** Free Creative Commons music (CC0 / CC BY, fine for business use), or your own track. */
-function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, setVolume }: { t: T; query: string; mood: string; seconds: number; music: File | null; credit: string; onPick: (f: File | null, credit: string) => void; volume: number; setVolume: (v: number) => void }) {
+function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onPick, volume, setVolume }: { t: T; tags: string[]; energy: string; query: string; mood: string; seconds: number; music: File | null; credit: string; onPick: (f: File | null, credit: string) => void; volume: number; setVolume: (v: number) => void }) {
   const [q, setQ] = useState(query);
   const [tracks, setTracks] = useState<Track[] | null>(null);
   const [busy, setBusy] = useState("");
@@ -346,13 +349,20 @@ function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, s
   const [playing, setPlaying] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   useEffect(() => { setQ(query); }, [query]);
-  const search = async (term = q) => {
-    setBusy("search"); setErr("");
-    try { const r = await fetch(`${API_ROOT}/reel/music?q=${encodeURIComponent(term)}&seconds=${seconds}`); const d = await r.json(); if (!r.ok) throw new Error(d.detail); setTracks(d.tracks || []); }
+  const [page, setPage] = useState(0);
+  const [src, setSrc] = useState("");
+  const search = async (term = q, pg = 0) => {
+    setBusy("search"); setErr(""); setPage(pg);
+    // The planner's tags when the search is still its suggestion; otherwise the words typed
+    const useTags = term.trim() === query.trim() && tags.length ? tags : term.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 2);
+    try { const r = await fetch(`${API_ROOT}/reel/music?q=${encodeURIComponent(term)}&seconds=${seconds}&tags=${encodeURIComponent(useTags.join(","))}&energy=${energy}&page=${pg}`); const d = await r.json(); if (!r.ok) throw new Error(d.detail); setTracks(d.tracks || []); setSrc(d.source || ""); }
     catch (e: any) { setErr(e?.message || "The music library didn't answer"); setTracks([]); }
     finally { setBusy(""); }
   };
   useEffect(() => { search(query); return () => audio.current?.pause(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new plan with a different vibe: search again for it
+  const lastQuery = useRef(query);
+  useEffect(() => { if (query !== lastQuery.current) { lastQuery.current = query; search(query); } }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
   const listen = (tr: Track) => {
     if (playing === tr.id) { audio.current?.pause(); setPlaying(null); return; }
     audio.current?.pause(); audio.current = new Audio(tr.url); audio.current.volume = 0.7; audio.current.play().catch(() => {}); setPlaying(tr.id);
@@ -375,22 +385,24 @@ function MusicPicker({ t, query, mood, seconds, music, credit, onPick, volume, s
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && search()} placeholder="Mood, e.g. calm piano" style={{ ...field(t), flex: 1 }} />
         <Btn onClick={() => search()} disabled={busy === "search"} style={{ height: 36 }}>{busy === "search" ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}Find music</Btn>
       </div>
-      {mood && <Muted>Suggested mood: {mood}</Muted>}
+      {mood && <Muted>Suggested for this reel: {mood}{energy ? ` · ${energy} energy` : ""}</Muted>}
       <div style={{ maxHeight: 230, overflowY: "auto" }}>
         {tracks?.map(tr => (
           <div key={tr.id} className="flex items-center gap-2" style={{ padding: "7px 0", borderTop: `1px solid ${t.LINE}`, fontSize: 12.5 }}>
             <IconBtn t={t} title={playing === tr.id ? "Stop listening" : "Listen"} onClick={() => listen(tr)}>{playing === tr.id ? <Pause size={12} /> : <Play size={12} />}</IconBtn>
             <div className="flex-1 min-w-0"><div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr.title}</div>
-              <div style={{ color: t.FAINT, fontSize: 11.5 }}>{tr.creator} · {mm(tr.seconds)} · {tr.license}{tr.seconds < seconds ? " · shorter than the reel" : ""}</div></div>
+              <div style={{ color: t.FAINT, fontSize: 11.5 }}>{tr.creator} · {mm(tr.seconds)} · {tr.license}{tr.seconds < seconds ? " · shorter than the reel" : ""}{tr.matches?.length ? <span style={{ color: t.TEAL }}> · {tr.matches.join(", ")}</span> : null}</div></div>
             <Btn onClick={() => use(tr)} disabled={!!busy} style={{ height: 30 }}>{busy === tr.id ? <Loader2 size={13} className="animate-spin" /> : null}Use</Btn>
           </div>))}
         {tracks && !tracks.length && !busy && <Muted>No tracks found. Try another mood, like piano, ambient or acoustic.</Muted>}
+        {tracks && tracks.length > 0 && <button onClick={() => search(q, page + 1)} disabled={!!busy} style={{ background: "none", border: "none", padding: "8px 0 2px", color: t.TEAL, fontWeight: 600, fontSize: 12.5, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <RefreshCw size={12} />More tracks</button>}
       </div>
       <ErrorNote t={t} text={err} />
       <label className="flex items-center gap-3" style={{ cursor: "pointer", fontSize: 12.5, color: t.TEAL, fontWeight: 600 }}>
         <Upload size={13} />Or upload your own track<input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f, ""); }} /></label>
       <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
-      <Muted>Free Creative Commons music (CC0 and CC BY, fine for business use) from Jamendo via Openverse.</Muted>
+      <Muted>Instrumental Creative Commons music (CC0 and CC BY only, fine for business use){src === "jamendo" ? ", most popular on Jamendo first" : " via Openverse"}. Teal words show which of the reel's moods a track matches.</Muted>
     </div>
   );
 }
