@@ -215,7 +215,11 @@ def _jamendo(tags: list, energy: str, min_seconds: int, page: int) -> list:
         params = {**base, **{k: v for k, v in extra.items() if v}}
         r = requests.get("https://api.jamendo.com/v3.0/tracks/", params=params, timeout=20)
         r.raise_for_status()
-        for n, x in enumerate(r.json().get("results", [])):
+        js = r.json()
+        head = js.get("headers") or {}
+        if head.get("status") == "failed":           # e.g. a wrong or not-yet-activated Client ID
+            raise Exception(f"Jamendo said: {head.get('error_message') or head.get('code')}")
+        for n, x in enumerate(js.get("results", [])):
             lic = _business_ok(x.get("license_ccurl", ""))
             if not lic or not x.get("audio") or any(t["id"] == f"jam-{x['id']}" for t in out):
                 continue
@@ -236,10 +240,15 @@ def _openverse_music(tags: list, query: str) -> list:
     for q in list(dict.fromkeys([" ".join(tags[:2]), *(tags[:3]), query]))[:4]:
         if not q:
             continue
-        r = requests.get(f"{OPENVERSE}/audio/", headers=UA, timeout=25,
-                         params={"q": q, "license": "cc0,by", "category": "music", "page_size": 30})
-        r.raise_for_status()
-        for n, x in enumerate(r.json().get("results", [])):
+        try:
+            r = requests.get(f"{OPENVERSE}/audio/", headers=UA, timeout=20,
+                             params={"q": q, "license": "cc0,by", "category": "music", "page_size": 30})
+            r.raise_for_status()
+            results = r.json().get("results", [])
+        except Exception as e:                         # one busy search doesn't spoil the others
+            print("Openverse music search failed:", q, e)
+            continue
+        for n, x in enumerate(results):
             if not x.get("url") or any(t["id"] == x["id"] for t in out):
                 continue
             lic = (x.get("license") or "").upper()
@@ -251,20 +260,26 @@ def _openverse_music(tags: list, query: str) -> list:
     return out
 
 
-def find_music(query: str, min_seconds: int = 0, tags: list | None = None, energy: str = "", page: int = 0) -> list:
+def find_music(query: str, min_seconds: int = 0, tags: list | None = None, energy: str = "", page: int = 0) -> tuple:
     """Music that fits the reel's vibe (CC0 / CC BY only, safe for business use).
     With a free Jamendo key it searches Jamendo directly: instrumental tracks, by genre/mood tags and tempo,
     most popular first (the best-produced tracks). Otherwise Openverse. Every track is then scored on how many
     of the wanted tags it really has, the right tempo, being long enough, and not being a jingle or loop."""
     tags = [t for t in (tags or []) if t] or [w for w in _re.findall(r"[a-z]+", (query or "").lower()) if w not in _STOP][:4] or ["cinematic"]
-    tracks = []
+    tracks, note, source = [], "", "openverse"
     if JAMENDO_ID:
         try:
             tracks = _jamendo(tags, energy, min_seconds, page)
+            source = "jamendo"
         except Exception as e:
             print("Jamendo failed:", e)
+            note = f"Jamendo didn't work ({e}), so these are from Openverse. Check JAMENDO_CLIENT_ID on Render and that the Jamendo account is activated."
+    else:
+        note = "For better music, add the free JAMENDO_CLIENT_ID on Render (Help → Company guide → Better music for reels)."
     if len(tracks) < 5:
         tracks += [t for t in _openverse_music(tags, query) if t["id"] not in {x["id"] for x in tracks}]
+    if not tracks and len(tags) > 1:                  # nothing for all the moods together: try the main one alone
+        tracks = _openverse_music(tags[:1], tags[0])
     want = set(tags)
     for t in tracks:
         have = set(t.get("tags") or []) | _words(t["title"])
@@ -280,7 +295,7 @@ def find_music(query: str, min_seconds: int = 0, tags: list | None = None, energ
         tracks = tracks[page * 12:] or tracks
     for t in tracks:
         t.pop("rank", None); t.pop("score", None)
-    return tracks[:12]
+    return tracks[:12], note, source
 
 
 def fetch_music(url: str) -> str:

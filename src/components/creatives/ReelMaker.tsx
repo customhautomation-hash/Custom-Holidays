@@ -367,11 +367,12 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
   useEffect(() => { setQ(query); }, [query]);
   const [page, setPage] = useState(0);
   const [src, setSrc] = useState("");
+  const [srcNote, setSrcNote] = useState("");
   const search = async (term = q, pg = 0) => {
     setBusy("search"); setErr(""); setPage(pg);
     // The planner's tags when the search is still its suggestion; otherwise the words typed
     const useTags = term.trim() === query.trim() && tags.length ? tags : term.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 2);
-    try { const r = await fetch(`${API_ROOT}/reel/music?q=${encodeURIComponent(term)}&seconds=${seconds}&tags=${encodeURIComponent(useTags.join(","))}&energy=${energy}&page=${pg}`); const d = await r.json(); if (!r.ok) throw new Error(d.detail); setTracks(d.tracks || []); setSrc(d.source || ""); }
+    try { const r = await fetch(`${API_ROOT}/reel/music?q=${encodeURIComponent(term)}&seconds=${seconds}&tags=${encodeURIComponent(useTags.join(","))}&energy=${energy}&page=${pg}`); const d = await r.json(); if (!r.ok) throw new Error(d.detail); setTracks(d.tracks || []); setSrc(d.source || ""); setSrcNote(d.note || ""); }
     catch (e: any) { setErr(e?.message || "The music library didn't answer"); setTracks([]); }
     finally { setBusy(""); }
   };
@@ -419,6 +420,7 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
         <Upload size={13} />Or upload your own track<input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f, ""); }} /></label>
       <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
       <Muted>Instrumental Creative Commons music (CC0 and CC BY only, fine for business use){src === "jamendo" ? ", most popular on Jamendo first" : " via Openverse"}. Teal words show which of the reel's moods a track matches.</Muted>
+      {srcNote && <div style={{ fontSize: 12, color: t.MUTED, background: t.BG, boxShadow: t.IN, borderRadius: 10, padding: "8px 10px" }}>{srcNote}</div>}
     </div>
   );
 }

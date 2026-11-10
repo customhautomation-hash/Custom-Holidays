@@ -460,8 +460,10 @@ def reel_music(q: str = "calm cinematic", seconds: int = 30, tags: str = "", ene
     from creatives.stock import find_music, JAMENDO_ID
     try:
         tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
-        return {"success": True, "tracks": find_music(q, seconds, tag_list, energy, page), "source": "jamendo" if JAMENDO_ID else "openverse"}
+        tracks, note, source = find_music(q, seconds, tag_list, energy, page)
+        return {"success": True, "tracks": tracks, "source": source, "note": note}
     except Exception as e:
+        print("Music search failed:", e)
         raise HTTPException(status_code=422, detail="The music library didn't answer. Try again in a minute")
 
 
