@@ -82,22 +82,32 @@ def _score(item: dict, query: str, seconds: float = 0) -> float:
     return match * 3 + portrait * 1.5 + sharp + fits * 1.5 - item.get("rank", 0) * 0.04
 
 
+def _pexels_get(path: str, query: str, key: str) -> list:
+    """Vertical results first (they fill a reel), then any shape to have enough to choose from."""
+    out, seen = [], set()
+    for extra in ({"orientation": "portrait"}, {}):
+        r = requests.get(f"https://api.pexels.com/{path}", headers={"Authorization": PEXELS_KEY, **UA},
+                         params={"query": query, "per_page": 40, **extra}, timeout=20)
+        r.raise_for_status()
+        for x in r.json().get(key, []):
+            if x["id"] not in seen:
+                seen.add(x["id"]); out.append(x)
+        if len(out) >= 25:
+            break
+    return out
+
+
 def _pexels_photos(query: str) -> list:
-    r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": PEXELS_KEY, **UA},
-                     params={"query": query, "per_page": 40}, timeout=20)
-    r.raise_for_status()
     return [{"id": f"pexels-photo-{p['id']}", "url": p["src"].get("large2x") or p["src"]["original"], "w": p.get("width"), "h": p.get("height"),
+             "thumb": p["src"].get("medium") or p["src"].get("small"),
              "about": f"{p.get('alt', '')} {_describe(p.get('url', ''))}", "rank": n,
              "credit": f"Photo: {p.get('photographer', 'Pexels')} on Pexels", "link": p.get("url", "")}
-            for n, p in enumerate(r.json().get("photos", []))]
+            for n, p in enumerate(_pexels_get("v1/search", query, "photos"))]
 
 
 def _pexels_videos(query: str) -> list:
-    r = requests.get("https://api.pexels.com/v1/videos/search", headers={"Authorization": PEXELS_KEY, **UA},
-                     params={"query": query, "per_page": 40}, timeout=20)
-    r.raise_for_status()
     out = []
-    for n, v in enumerate(r.json().get("videos", [])):
+    for n, v in enumerate(_pexels_get("videos/search", query, "videos")):
         files = [f for f in v.get("video_files", []) if f.get("file_type") == "video/mp4" and f.get("width") and f.get("height")]
         if not files:
             continue
@@ -106,7 +116,7 @@ def _pexels_videos(query: str) -> list:
         good = sorted([f for f in files if min(f["width"], f["height"]) >= 700], key=lambda f: f["width"] * f["height"])
         f = good[0] if good else max(files, key=lambda f: f["width"] * f["height"])
         out.append({"id": f"pexels-video-{v['id']}", "url": f["link"], "w": v.get("width") or f["width"], "h": v.get("height") or f["height"],
-                    "about": _describe(v.get("url", "")), "rank": n, "duration": v.get("duration"),
+                    "about": _describe(v.get("url", "")), "rank": n, "duration": v.get("duration"), "thumb": v.get("image"),
                     "credit": f"Video: {v.get('user', {}).get('name', 'Pexels')} on Pexels", "link": v.get("url", "")})
     return out
 
@@ -126,13 +136,66 @@ def _openverse_photos(query: str) -> list:
     return out
 
 
+# ── Looking before choosing: an AI looks at the best candidates and picks the ones that really match ──
+
+import base64 as _b64
+import threading as _th
+import time as _time
+from concurrent.futures import ThreadPoolExecutor as _Pool
+
+_rank_cache: dict = {}          # (query, kind, scene) -> (time, ordered ids): Swap clip steps through the same order
+_rank_lock = _th.Lock()
+
+
+def _thumb(url: str):
+    try:
+        r = requests.get(url, headers=UA, timeout=8)
+        r.raise_for_status()
+        if len(r.content) > 600_000:
+            return None
+        return (r.headers.get("content-type", "image/jpeg").split(";")[0], _b64.b64encode(r.content).decode())
+    except Exception:
+        return None
+
+
+def _look_and_rank(cands: list, scene: str, kind: str) -> list:
+    """Shows the AI the preview frame of up to 8 candidates and asks how well each fits the scene.
+    Returns the candidates best first. If the AI isn't available, the order is unchanged."""
+    cands = [c for c in cands if c.get("thumb")][:8]
+    if len(cands) < 2 or not scene:
+        return cands
+    with _Pool(8) as pool:
+        thumbs = list(pool.map(lambda c: _thumb(c["thumb"]), cands))
+    keep = [(c, t) for c, t in zip(cands, thumbs) if t]
+    if len(keep) < 2:
+        return cands
+    prompt = (f"You are choosing stock {'video clips' if kind == 'video' else 'photos'} for a luxury travel Instagram reel.\n"
+              f"The shot we need: {scene}\n"
+              f"Here are {len(keep)} candidates (image 1 to {len(keep)}; for clips this is one frame).\n"
+              "Score each 0-10 for how well it fits that exact shot: the right place and subject, the right time of day "
+              "(night vs day), the same mood and style (e.g. neon cyberpunk vs calm traditional), and how good it would look "
+              "in a premium reel (sharp, well composed, vertical-friendly, no watermark or text, no awkward posing). "
+              'Return ONLY JSON: {"scores": [n1, n2, ...]} in the same order.')
+    try:
+        from prices.routes import _ai_json
+        ans, _model = _ai_json(prompt, [t for _, t in keep], timeout=40)
+        scores = [float(x) for x in (ans.get("scores") or [])]
+    except Exception as e:
+        print("Clip look-check skipped:", e)
+        return cands
+    if len(scores) != len(keep):
+        return cands
+    ranked = sorted(zip(keep, scores), key=lambda z: -(z[1] + z[0][0].get("score", 0) * 0.15))
+    return [c for (c, _), sc in ranked if sc >= 3] or [c for (c, _), _ in ranked]
+
+
 def _creator(credit: str) -> str:
     m = _re.match(r"(?:Photo|Video): (.+?)(?: on Pexels| \(| via |$)", credit or "")
     return (m.group(1) if m else "").strip().lower()
 
 
 def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", exclude: list | None = None, seconds: float = 0,
-               avoid_credits: list | None = None) -> dict:
+               avoid_credits: list | None = None, scene: str = "") -> dict:
     """Finds the best real photo (or video clip) for a scene: it must show what was searched for, be
     vertical and sharp, (for clips) last long enough, and not already be used elsewhere in the reel.
     `pick` steps through the next-best ones for Swap clip. The file is copied to our storage."""
@@ -171,6 +234,22 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
             raise Exception("Real video clips need a free Pexels key (PEXELS_API_KEY on Render)")
         raise Exception("No match found for this scene")
     pool.sort(key=lambda it: -it["score"])
+    # Look at the best few before choosing, so the clip really shows what the scene needs.
+    # The order is remembered, so Swap clip moves to the next-best look, not a random one.
+    if scene:
+        key = (query.lower(), kind, scene[:200].lower())
+        with _rank_lock:
+            hit = _rank_cache.get(key)
+        if hit and _time.time() - hit[0] < 1800:
+            order = {i: n for n, i in enumerate(hit[1])}
+        else:
+            looked = _look_and_rank(pool[:8], scene, kind)
+            order = {c["id"]: n for n, c in enumerate(looked)}
+            with _rank_lock:
+                _rank_cache[key] = (_time.time(), [c["id"] for c in looked])
+                if len(_rank_cache) > 300:
+                    _rank_cache.pop(next(iter(_rank_cache)))
+        pool.sort(key=lambda it: (order.get(it["id"], 99), -it["score"]))
     # Try the chosen one; if it is too big, too slow or broken, quietly use the next best (up to 3 tries)
     last = None
     for step in range(min(3, len(pool))):

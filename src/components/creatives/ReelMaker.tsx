@@ -168,7 +168,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
           const rest = others.filter(x => x.id !== c.id);
           const used = rest.filter(x => x.ref).map(x => x.ref!);
           const credits = rest.filter(x => x.credit).map(x => x.credit);
-          const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, avoid_credits: credits, seconds: c.seconds },
+          const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, avoid_credits: credits, seconds: c.seconds,
+            scene: [c.text && `On-screen words: "${c.text}"`, c.image_prompt].filter(Boolean).join(". ") },
             { ...opts, limit: kind === "video" ? 90_000 : 60_000 });
           const p = typeof d.pick === "number" ? d.pick : pick;
           return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick: p, status: "ready", note: "" };

@@ -208,6 +208,11 @@ STEP 3. For every scene write a stock-footage search ("photo_query") that a site
 2-4 plain words naming the real landmark or subject and place (e.g. "Fushimi Inari torii",
 "Santorini Oia sunset", "matcha tea ceremony", "Maldives overwater villa"). No adjectives like luxury,
 cinematic, beautiful, 4K. Add "photo_query_alt": a broader backup (e.g. "Kyoto shrine", "Japanese tea").
+The query must capture the LOOK the scene needs, not just the place: time of day and the defining visual,
+e.g. for a "Cyberpunk Tokyo" section: "Shinjuku neon night", "Tokyo neon alley rain", "Akihabara lights";
+for "Ancient Kyoto": "Kyoto pagoda", "Fushimi Inari gates", "Gion old street"; for "Rural Japan":
+"Japan rice terraces", "Shirakawa-go village". Every scene in a section gets a DIFFERENT query.
+"image_prompt" must describe that same look precisely (it is also used to check that the clip matches).
 
 Return ONLY a valid JSON object. No markdown, no explanation.
 

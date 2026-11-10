@@ -441,6 +441,7 @@ class StockRequest(BaseModel):
     exclude: list = []
     seconds: float = 0
     avoid_credits: list = []
+    scene: str = ""          # what the shot should show (its words + description), for the AI look-check
 
 
 @router.post("/reel/stock")
@@ -448,7 +449,7 @@ def reel_stock(req: StockRequest):
     """A real photo or video clip for a reel scene (Pexels, or Openverse for photos without a key)."""
     from creatives.stock import find_stock
     try:
-        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds, req.avoid_credits)}
+        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds, req.avoid_credits, req.scene)}
     except Exception as e:
         # 422, not 502: a 502 looks like "the server is asleep" to the browser, which then keeps retrying
         raise HTTPException(status_code=404 if "found" in str(e) else 422, detail=str(e))
