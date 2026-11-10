@@ -11,11 +11,12 @@ import { Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
+import { analyseTrack, bestStart, fitToBeat, MusicFit, TrackInfo } from "@/lib/musicFit";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
-import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
+import { W, H, END, ReelLook, TextFormat, Transition, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
-type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals };
+type Clip = { id: string; image_prompt: string; video_prompt: string; photo_query: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string; credit: string; pick: number; kind?: Visuals; alt?: string; ref?: string };
 type Track = { id: string; title: string; creator: string; seconds: number; license: string; url: string; link: string; credit: string };
 type Visuals = "ai" | "photo" | "video";
 type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string };
@@ -38,6 +39,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [seconds, setSeconds] = useState(30);
   const [fmt, setFmt] = useState<TextFormat>({ position: "bottom", font: "serif", size: "medium" });
   const [pace, setPace] = useState<keyof typeof PACE_FADE>("slow");
+  const [transition, setTransition] = useState<Transition>("dissolve");
   const [source, setSource] = useState<"new" | "board">("new");
   const [opt, setOpt] = useState({ text: true, title: true, logo: true, end: true, music: false, moving: false });
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -47,6 +49,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [musicCredit, setMusicCredit] = useState("");
   const [visuals, setVisuals] = useState<Visuals>("photo");
   const [volume, setVolume] = useState(0.8);
+  const [track, setTrack] = useState<TrackInfo | null>(null);
+  const [musicStart, setMusicStart] = useState(0);
+  const [onBeat, setOnBeat] = useState(true);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
@@ -54,7 +59,21 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const boardReady = board.scenes.filter(s => s.image_path || s.video_path);
 
   useEffect(() => { if (!videoOn) setOpt(o => ({ ...o, moving: false })); }, [videoOn]);
+  // Read the beat of the chosen track and start it at its best part
+  useEffect(() => {
+    let alive = true; setTrack(null);
+    if (!music) return;
+    (async () => {
+      try {
+        const ac = new AudioContext(); const buf = await ac.decodeAudioData(await music.arrayBuffer()); ac.close();
+        const info = analyseTrack(buf);
+        if (alive) { setTrack(info); setMusicStart(bestStart(info, Math.max(10, totalRef.current))); }
+      } catch { /* an unreadable track simply isn't beat-matched */ }
+    })();
+    return () => { alive = false; };
+  }, [music]);
   const toggle = (k: keyof typeof opt) => setOpt(o => ({ ...o, [k]: !o[k] }));
+  const clipsRef = useRef<Clip[]>([]); clipsRef.current = clips;
   const upd = (id: string, p: Partial<Clip>) => setClips(l => l.map(c => (c.id === id ? { ...c, ...p } : c)));
 
   const make = async () => {
@@ -66,14 +85,14 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
       const n = source === "board" ? boardReady.length : 0;
       const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
       setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "" });
-      if (p.format) { setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium" }); setPace(p.format.pace || "slow"); }
+      if (p.format) { setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium" }); setPace(p.format.pace || "slow"); setTransition(p.format.transition || "dissolve"); }
       if (p.end_sub) setEndSub(p.end_sub);
       if (source === "board") {
         setClips(boardReady.map((s, i) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: p.scenes[i]?.on_screen_text || "",
           seconds: p.scenes[i]?.seconds || Math.max(2, (seconds - END) / n), image: s.image_path, video: s.video_path, status: "ready", note: "", photo_query: "", credit: "", pick: 0 })));
         return;
       }
-      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "", photo_query: s.photo_query || "", credit: "", pick: 0, kind: visuals }));
+      const list: Clip[] = p.scenes.map((s: any) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: s.on_screen_text, seconds: s.seconds, image: null, video: null, status: "waiting", note: "", photo_query: s.photo_query || "", alt: s.photo_query_alt || "", credit: "", pick: 0, kind: visuals }));
       setClips(list);
       for (let i = 0; i < list.length; i++) {
         if (cancel.current) return;
@@ -103,8 +122,10 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const getVisual = async (c: Clip, kind: Visuals, pick: number): Promise<Partial<Clip>> => {
     if (kind !== "ai") {
       try {
-        const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), kind: kind === "video" ? "video" : "photo", pick });
-        return kind === "video" ? { video: d.url, image: null, credit: d.credit, pick, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, pick, status: "ready", note: "" };
+        // Don't reuse a photo or clip that's already in this reel
+        const used = clipsRef.current.filter(x => x.id !== c.id && x.ref).map(x => x.ref!);
+        const d = await post("/reel/stock", { query: c.photo_query || c.text || c.image_prompt.slice(0, 60), alt: c.alt || "", kind: kind === "video" ? "video" : "photo", pick, exclude: used, seconds: c.seconds });
+        return kind === "video" ? { video: d.url, image: null, credit: d.credit, ref: d.id, pick, status: "ready", note: "" } : { image: d.url, video: null, credit: d.credit, ref: d.id, pick, status: "ready", note: "" };
       } catch (e: any) {
         try { return { image: await makePicture(c.image_prompt, "9:16"), video: null, credit: "", status: "ready", note: `${e?.message || "No real one found"}. An AI picture is used instead` }; }
         catch { return { status: "error", note: "Nothing could be found or made for this clip. Try again" }; }
@@ -124,11 +145,16 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const clipKind = (c: Clip): Visuals => c.kind || (c.video && c.credit ? "video" : c.credit ? "photo" : "ai");
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
-  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace] };
-  const usable = clips.filter(c => c.video || c.image);
+  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace], transition };
+  const usableRaw = clips.filter(c => c.video || c.image);
+  const beatSeconds = useMemo(() => (opt.music && music && track && onBeat ? fitToBeat(usableRaw.map(c => c.seconds), track, musicStart) : null),
+    [opt.music, music, track, onBeat, musicStart, usableRaw.map(c => c.seconds).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const usable = beatSeconds ? usableRaw.map((c, i) => ({ ...c, seconds: beatSeconds[i] ?? c.seconds })) : usableRaw;
   const visualCredits = [...new Set(clips.filter(c => c.credit).map(c => c.credit.replace(/^(Photo|Video): /, "")))];
   const creditLine = [visualCredits.length ? `${clips.some(c => c.credit.startsWith("Video")) ? "Footage" : "Photos"}: ${visualCredits.join(", ")}` : "", opt.music && musicCredit ? musicCredit : ""].filter(Boolean).join(" · ");
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
+  const totalRef = useRef(total); totalRef.current = total;
+  const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total };
 
   return (
     <div className="flex flex-col gap-6">
@@ -179,6 +205,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                 <Mini t={t} label="Text" value={fmt.position} options={[["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]]} onChange={v => setFmt(f => ({ ...f, position: v as any }))} />
                 <Mini t={t} label="Font" value={fmt.font} options={[["serif", "Elegant"], ["sans", "Modern"]]} onChange={v => setFmt(f => ({ ...f, font: v as any }))} />
                 <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
+                <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
                 <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
               </div></Row>
               {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip" style={field(t)} /></Row>}
@@ -213,6 +240,16 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                 <input value={endSub} onChange={e => setEndSub(e.target.value)} placeholder="Website or phone, e.g. +91 98200 00000" style={field(t)} /></div></Row>}
               {opt.music && <Row t={t} label="Music"><MusicPicker t={t} query={plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
                 onPick={(f, credit) => { setMusic(f); setMusicCredit(credit); }} volume={volume} setVolume={setVolume} /></Row>}
+              {opt.music && music && <Row t={t} label="Timing"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
+                {!track ? <Muted>Reading the beat…</Muted> : <>
+                  <div style={{ color: t.MUTED }}>About {track.bpm} beats a minute · {Math.floor(track.duration / 60)}:{String(Math.round(track.duration % 60)).padStart(2, "0")} long{fit.loop ? " · repeats to fill the reel" : ""}</div>
+                  <label className="flex items-center gap-3">Music starts at
+                    <input type="range" min={0} max={Math.max(0, Math.floor(track.duration - 2))} step={0.1} value={musicStart} onChange={e => setMusicStart(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} />
+                    <span style={{ fontVariantNumeric: "tabular-nums", width: 36 }}>{Math.floor(musicStart / 60)}:{String(Math.floor(musicStart % 60)).padStart(2, "0")}</span>
+                    <Btn onClick={() => setMusicStart(bestStart(track, total))} style={{ height: 30 }}>Best part</Btn></label>
+                  <label className="flex items-center gap-2" style={{ cursor: "pointer" }}><input type="checkbox" checked={onBeat} onChange={e => setOnBeat(e.target.checked)} style={{ accentColor: "#13585B" }} />Cut the clips on the beat</label>
+                  <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
+              </div></Row>}
             </Card>
 
             {plan && (plan.caption || plan.hashtags.length > 0) && (
@@ -225,7 +262,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               </Card>)}
           </div>
 
-          <Preview t={t} active={active} clips={usable} look={look} music={opt.music ? music : null} volume={volume} name={(brief || board.dest || "reel").slice(0, 40)} />
+          <Preview t={t} active={active} clips={usable} look={look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
         </div>)}
     </div>
   );
@@ -331,7 +368,7 @@ function IconBtn({ t, title, onClick, disabled, children }: { t: T; title: strin
 }
 
 /** Live preview on a canvas, plus export. Media is loaded once and reused while text and timings change. */
-function Preview({ t, active, clips, look, music, volume, name }: { t: T; active: boolean; clips: Clip[]; look: ReelLook; music: File | null; volume: number; name: string }) {
+function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: boolean; clips: Clip[]; look: ReelLook; music: File | null; fit: MusicFit; name: string }) {
   const pageVisible = useContext(PageVisible);
   const canvas = useRef<HTMLCanvasElement>(null);
   const player = useRef<ReelPlayer | null>(null);
@@ -375,17 +412,16 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
 
   useEffect(() => {
     if (audio.current) { audio.current.pause(); URL.revokeObjectURL(audio.current.src); audio.current = null; }
-    if (music) { audio.current = new Audio(URL.createObjectURL(music)); audio.current.volume = volume; }
+    if (music) { audio.current = new Audio(URL.createObjectURL(music)); audio.current.preload = "auto"; }
   }, [music]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (audio.current) audio.current.volume = volume; }, [volume]);
 
   // One player for the life of the preview. New clips, text or settings are swapped in without stopping playback.
   useEffect(() => {
     const ctx = canvas.current?.getContext("2d");
     if (!ctx || !L) return;
-    if (!player.current) { player.current = new ReelPlayer(ctx, L, look, setTime, audio.current); player.current.seek(0); }
-    else player.current.update(L, look, audio.current);
-  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.text?.position, look.text?.font, look.text?.size, look.fade, music]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!player.current) { player.current = new ReelPlayer(ctx, L, look, setTime, audio.current, fit); player.current.seek(0); }
+    else player.current.update(L, look, audio.current, fit);
+  }, [fit.start, fit.volume, fit.loop, fit.fadeOut, L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.text?.position, look.text?.font, look.text?.size, look.fade, look.transition, music]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { player.current?.pause(); }, []);
   // Stop the preview (and its music) when you leave the Reel tab or the page
   useEffect(() => { if ((!active || !pageVisible) && player.current?.playing) { player.current.pause(); setPlaying(false); } }, [active, pageVisible]);
@@ -398,8 +434,8 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
     try {
       // Frame by frame where the browser can (smooth and complete); otherwise record in real time
       let out: { blob: Blob; ext: string };
-      try { out = await exportReelFrames(L, look, music, volume, setProgress); }
-      catch (e: any) { if (e?.message !== "NO_WEBCODECS") console.warn("Frame export failed, recording instead:", e); setProgress(0); out = await exportReel(L, look, music, volume, setProgress); }
+      try { out = await exportReelFrames(L, look, music, fit, setProgress); }
+      catch (e: any) { if (e?.message !== "NO_WEBCODECS") console.warn("Frame export failed, recording instead:", e); setProgress(0); out = await exportReel(L, look, music, fit, setProgress); }
       const { blob, ext } = out;
       downloadBlob(blob, `${name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "reel"}-reel.${ext}`);
     } catch (e: any) { setErr(e?.message?.includes("tainted") || e?.name === "SecurityError" ? "The browser blocked one of the clips. Try making that clip again" : e?.message || "The reel couldn't be saved"); }

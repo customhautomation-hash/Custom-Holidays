@@ -3,12 +3,15 @@
  * Pictures get a slow zoom ("Ken Burns"), clips cross-fade, text sits on a soft shade, the logo is in the
  * corner and an end card closes the reel. The same drawing is used for the preview and the export.
  */
+import { MusicFit, gainAt, scheduleGain } from "./musicFit";
+
 export const W = 1080, H = 1920, FPS = 30, FADE = 0.45, END = 3;
 
 export type ReelClip = { kind: "image" | "video"; src: string; seconds: number; text: string };
 /** How the words on each clip look. The planner picks these to suit the kind of reel; people can change them. */
 export type TextFormat = { position: "bottom" | "middle" | "top"; font: "serif" | "sans"; size: "small" | "medium" | "large" };
-export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number };
+export type Transition = "dissolve" | "slide" | "zoom" | "cut";
+export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number; transition?: Transition };
 export const PACE_FADE = { slow: 0.5, medium: 0.35, fast: 0.2 } as const;
 const SIZES = { serif: { small: 64, medium: 82, large: 104 }, sans: { small: 50, medium: 64, large: 96 } };
 const POS_Y = { top: 0.2, middle: 0.5, bottom: 0.8 };
@@ -50,7 +53,7 @@ function drawItem(ctx: CanvasRenderingContext2D, it: Item, idx: number, lt: numb
     if (v.videoWidth) cover(ctx, v, v.videoWidth, v.videoHeight);
   } else {
     const im = it.el as HTMLImageElement;
-    const p = Math.min(1, Math.max(0, lt / Math.max(it.seconds, 0.1)));
+    const p = Math.min(1.3, Math.max(0, lt / Math.max(it.seconds, 0.1)));   // keeps moving through the transition
     const dir = idx % 2 ? 1 : -1;
     cover(ctx, im, im.naturalWidth, im.naturalHeight, 1.04 + 0.1 * p, dir * 40 * (p - 0.5), -30 * (p - 0.5));
   }
@@ -68,13 +71,22 @@ function textBlock(ctx: CanvasRenderingContext2D, text: string, font: string, si
   ctx.globalAlpha = alpha; ctx.font = `${font.replace("SIZE", String(size))}`; ctx.fillStyle = color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 3;
   const lines = wrap(ctx, text, W - 160);
-  lines.forEach((l, i) => ctx.fillText(l, W / 2, y + (i - (lines.length - 1) / 2) * size * 1.18));
+  const rise = (1 - alpha) * 26;   // words drift up gently as they appear
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, y + rise + (i - (lines.length - 1) / 2) * size * 1.18));
   ctx.restore();
 }
 
 const SERIF = `600 SIZEpx "Playfair Display", Georgia, serif`;
 const SANS = `600 SIZEpx "DM Sans", Inter, system-ui, sans-serif`;
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const easeIO = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
+/** Draws `draw` scaled around the centre and moved by (dx, dy). */
+function withTransform(ctx: CanvasRenderingContext2D, scale: number, dx: number, dy: number, alpha: number, draw: () => void) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.translate(W / 2 + dx, H / 2 + dy); ctx.scale(scale, scale); ctx.translate(-W / 2, -H / 2);
+  draw(); ctx.restore();
+}
 
 /** Draws the reel as it looks at time t (seconds). */
 export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look: ReelLook) {
@@ -87,8 +99,20 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
 
   if (i < items.length) {
     const lt = t - start;
-    if (i > 0 && lt < fade) drawItem(ctx, items[i - 1], i - 1, items[i - 1].seconds + lt);
-    ctx.save(); ctx.globalAlpha = i > 0 && lt < fade ? ease(lt / fade) : 1; drawItem(ctx, items[i], i, lt); ctx.restore();
+    const tr = look.transition || "dissolve";
+    if (i > 0 && lt < fade && tr !== "cut") {
+      const e = easeIO(lt / fade), prev = () => drawItem(ctx, items[i - 1], i - 1, items[i - 1].seconds + lt), cur = () => drawItem(ctx, items[i], i, lt);
+      if (tr === "slide") {          // the new clip pushes the old one up
+        withTransform(ctx, 1, 0, -H * e, 1, prev);
+        withTransform(ctx, 1, 0, H * (1 - e), 1, cur);
+      } else if (tr === "zoom") {    // fly through the old clip into the new one
+        withTransform(ctx, 1 + 0.35 * e, 0, 0, 1, prev);
+        withTransform(ctx, 1.18 - 0.18 * e, 0, 0, e, cur);
+      } else {                       // soft cross-dissolve
+        prev();
+        withTransform(ctx, 1, 0, 0, e, cur);
+      }
+    } else drawItem(ctx, items[i], i, lt);
 
     const it = items[i];
     const showTitle = look.showTitle && i === 0 && look.title && lt < Math.min(it.seconds, 3.4);
@@ -138,6 +162,12 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
   }
 }
 
+/** A clip shorter than its slot plays in gentle slow motion (down to half speed) instead of freezing. */
+function clipRate(v: HTMLVideoElement, slot: number) {
+  const d = v.duration || slot;
+  return d >= slot ? 1 : Math.max(0.5, d / slot);
+}
+
 /** Keeps the video clips in step with the reel's clock. */
 function syncVideos(L: Loaded, t: number, playing: boolean, fade = FADE) {
   let start = 0;
@@ -146,35 +176,50 @@ function syncVideos(L: Loaded, t: number, playing: boolean, fade = FADE) {
     if (it.kind !== "video") return;
     const v = it.el as HTMLVideoElement;
     const active = t >= s - 0.05 && t < start + fade;
-    const lt = Math.max(0, Math.min(t - s, (v.duration || it.seconds) - 0.05));
+    const rate = clipRate(v, it.seconds);
+    const lt = Math.max(0, Math.min((t - s) * rate, (v.duration || it.seconds) - 0.05));
     if (!active) { if (!v.paused) v.pause(); return; }
-    if (playing) { if (v.paused) { v.currentTime = lt; v.play().catch(() => {}); } }
+    if (playing) { if (v.playbackRate !== rate) v.playbackRate = rate; if (v.paused) { v.currentTime = lt; v.play().catch(() => {}); } }
     else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - lt) > 0.08) v.currentTime = lt; }
   });
 }
 
+const NO_FIT: MusicFit = { start: 0, volume: 0.8, fadeIn: 0.5, fadeOut: 3, loop: false };
+
 export class ReelPlayer {
   t = 0; playing = false; private raf = 0; private t0 = 0;
-  constructor(private ctx: CanvasRenderingContext2D, public L: Loaded, public look: ReelLook, private onTime?: (t: number) => void, public music?: HTMLAudioElement | null) {}
-  /** Swap in new clips, text or settings without stopping playback. */
-  update(L: Loaded, look: ReelLook, music?: HTMLAudioElement | null) {
-    const musicChanged = music !== this.music;
-    if (musicChanged) { this.music?.pause(); this.music = music; if (this.playing && music) { music.currentTime = this.t; music.play().catch(() => {}); } }
-    this.L = L; this.look = look;
+  constructor(private ctx: CanvasRenderingContext2D, public L: Loaded, public look: ReelLook, private onTime?: (t: number) => void,
+              public music?: HTMLAudioElement | null, public fit: MusicFit = NO_FIT) {}
+  /** Swap in new clips, text, settings or music without stopping playback. */
+  update(L: Loaded, look: ReelLook, music?: HTMLAudioElement | null, fit: MusicFit = this.fit) {
+    const musicChanged = music !== this.music || fit.start !== this.fit.start;
+    this.L = L; this.look = look; this.fit = fit;
+    if (musicChanged) { this.music?.pause(); this.music = music; if (this.playing) this.startMusic(); }
     if (this.t > this.total) this.t = this.total;
     if (!this.playing) this.draw();
   }
   get total() { return totalOf(this.L.items, this.look); }
   draw() { drawAt(this.ctx, this.t, this.L, this.look); }
-  seek(t: number) { this.t = Math.max(0, Math.min(t, this.total)); syncVideos(this.L, this.t, false, this.look.fade); if (this.music) this.music.currentTime = this.t; this.draw(); this.onTime?.(this.t); }
+  private musicTime(t: number) {
+    const m = this.music; if (!m) return 0;
+    const len = (m.duration || 1e9) - this.fit.start;
+    return this.fit.start + (this.fit.loop && len > 0 ? t % len : t);
+  }
+  private startMusic() {
+    const m = this.music; if (!m) return;
+    m.loop = this.fit.loop; m.currentTime = this.musicTime(this.t); m.volume = gainAt(this.t, this.total, this.fit);
+    m.play().catch(() => {});
+  }
+  seek(t: number) { this.t = Math.max(0, Math.min(t, this.total)); syncVideos(this.L, this.t, false, this.look.fade); if (this.music) this.music.currentTime = this.musicTime(this.t); this.draw(); this.onTime?.(this.t); }
   play(onEnd?: () => void) {
     if (this.t >= this.total - 0.05) this.t = 0;
     this.playing = true; this.t0 = performance.now() - this.t * 1000;
-    if (this.music) { this.music.currentTime = this.t; this.music.play().catch(() => {}); }
+    this.startMusic();
     const tick = () => {
       if (!this.playing) return;
       this.t = (performance.now() - this.t0) / 1000;
       if (this.t >= this.total) { this.t = this.total; this.draw(); this.pause(); this.onTime?.(this.t); onEnd?.(); return; }
+      if (this.music) this.music.volume = Math.max(0, Math.min(1, gainAt(this.t, this.total, this.fit)));
       syncVideos(this.L, this.t, true, this.look.fade); this.draw(); this.onTime?.(this.t);
       this.raf = requestAnimationFrame(tick);
     };
@@ -191,7 +236,7 @@ export function recordFormat() {
 }
 
 /** Plays the reel once on a hidden canvas and records it. Takes as long as the reel. */
-export async function exportReel(L: Loaded, look: ReelLook, music: File | null, volume: number, onProgress: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
+export async function exportReel(L: Loaded, look: ReelLook, music: File | null, fit: MusicFit, onProgress: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
   const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   const stream = canvas.captureStream(FPS);
@@ -205,10 +250,7 @@ export async function exportReel(L: Loaded, look: ReelLook, music: File | null, 
     const dest = audioCtx.createMediaStreamDestination();
     src.connect(gain); gain.connect(dest);
     dest.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
-    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + 1);
-    gain.gain.setValueAtTime(volume, audioCtx.currentTime + Math.max(1, total - 1.8));
-    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + total);
+    scheduleGain(gain.gain, total, fit, audioCtx.currentTime);
   }
   const { mime, ext } = recordFormat();
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 160_000 });
@@ -216,7 +258,8 @@ export async function exportReel(L: Loaded, look: ReelLook, music: File | null, 
   rec.ondataavailable = e => e.data.size && chunks.push(e.data);
   const done = new Promise<void>(r => (rec.onstop = () => r()));
   drawAt(ctx, 0, L, look);
-  const player = new ReelPlayer(ctx, L, look, t => onProgress(t / total), audio);
+  // The gain node does the fades here, so the player keeps the element at full volume
+  const player = new ReelPlayer(ctx, L, look, t => onProgress(t / total), audio, { ...fit, volume: 1, fadeIn: 0.0001, fadeOut: 0.0001 });
   rec.start(250);
   await new Promise<void>(r => player.play(r));
   await new Promise(r => setTimeout(r, 200));
@@ -235,7 +278,7 @@ async function seekVideos(L: Loaded, t: number, fade: number) {
     const v = it.el as HTMLVideoElement;
     if (!v.paused) v.pause();
     if (!(t >= s - 0.05 && t < start + fade)) return;
-    const lt = Math.max(0, Math.min(t - s, (v.duration || it.seconds) - 0.04));
+    const lt = Math.max(0, Math.min((t - s) * clipRate(v, it.seconds), (v.duration || it.seconds) - 0.04));
     if (Math.abs(v.currentTime - lt) < 0.001 && v.readyState >= 2) return;
     waits.push(new Promise<void>(res => {
       const done = () => { clearTimeout(timer); v.removeEventListener("seeked", done); res(); };
@@ -252,7 +295,7 @@ async function seekVideos(L: Loaded, t: number, fade: number) {
  * so the file is smooth and complete even on a slow computer or when the tab is in the background.
  * Throws "NO_WEBCODECS" where the browser can't do this (then the real-time recorder is used).
  */
-export async function exportReelFrames(L: Loaded, look: ReelLook, music: File | null, volume: number, onProgress: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
+export async function exportReelFrames(L: Loaded, look: ReelLook, music: File | null, fit: MusicFit, onProgress: (p: number) => void): Promise<{ blob: Blob; ext: string }> {
   const w = window as any;
   if (!w.VideoEncoder || !w.VideoFrame) throw new Error("NO_WEBCODECS");
   const fps = 30;
@@ -275,10 +318,11 @@ export async function exportReelFrames(L: Loaded, look: ReelLook, music: File | 
     ac.close();
     const off = new OfflineAudioContext(2, Math.ceil(total * SR), SR);
     const src = off.createBufferSource(); src.buffer = decoded;
+    const start = Math.min(fit.start, Math.max(0, decoded.duration - 0.5));
+    if (fit.loop || decoded.duration - start < total) { src.loop = true; src.loopStart = start; src.loopEnd = decoded.duration; }
     const g = off.createGain();
-    g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(volume, Math.min(1, total / 3));
-    g.gain.setValueAtTime(volume, Math.max(1, total - 1.8)); g.gain.linearRampToValueAtTime(0, total);
-    src.connect(g); g.connect(off.destination); src.start(0);
+    scheduleGain(g.gain, total, fit, 0);
+    src.connect(g); g.connect(off.destination); src.start(0, start);
     audioBuf = await off.startRendering();
     for (const codec of ["mp4a.40.2", "opus"]) {
       const cfg = { codec, sampleRate: SR, numberOfChannels: 2, bitrate: 160_000 };

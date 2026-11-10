@@ -427,6 +427,9 @@ class StockRequest(BaseModel):
     query: str
     kind: str = "photo"
     pick: int = 0
+    alt: str = ""
+    exclude: list = []
+    seconds: float = 0
 
 
 @router.post("/reel/stock")
@@ -434,7 +437,7 @@ def reel_stock(req: StockRequest):
     """A real photo or video clip for a reel scene (Pexels, or Openverse for photos without a key)."""
     from creatives.stock import find_stock
     try:
-        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick)}
+        return {"success": True, **find_stock(req.query, "video" if req.kind == "video" else "photo", req.pick, req.alt, req.exclude, req.seconds)}
     except Exception as e:
         raise HTTPException(status_code=404 if "found" in str(e) else 502, detail=str(e))
 

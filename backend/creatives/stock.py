@@ -44,69 +44,117 @@ def _download(url: str, timeout: int = 90) -> bytes:
 
 # ── Photos and video clips ────────────────────────────────────────────────
 
+import re as _re
+
+_STOP = {"the", "a", "an", "of", "in", "at", "and", "with", "on", "to", "for"}
+
+
+def _words(text: str) -> set:
+    return {w for w in _re.findall(r"[a-z0-9]+", (text or "").lower()) if w not in _STOP and len(w) > 1}
+
+
+def _describe(url: str) -> str:
+    """Pexels pages are named after what they show: /photo/aerial-view-of-fushimi-inari-12345/"""
+    return " ".join(_re.findall(r"[a-z]+", (urlparse(url).path or "").replace("-", " ").lower()))
+
+
+def _score(item: dict, query: str, seconds: float = 0) -> float:
+    q = _words(query)
+    words = _words(item.get("about", ""))
+    match = len(q & words) / max(1, len(q))                     # how much of the search it actually shows
+    w, h = item.get("w") or 0, item.get("h") or 0
+    portrait = 1.0 if h >= w * 1.2 else 0.5 if h >= w else 0.0  # vertical shots fill a reel best
+    sharp = min(1.0, min(w, h) / 1080) if w and h else 0.5
+    fits = 1.0
+    if item.get("duration") is not None:                        # clips must last long enough
+        d = item["duration"] or 0
+        fits = 0.0 if d < seconds else 1.0 if d <= max(30, seconds * 4) else 0.6
+    return match * 3 + portrait * 1.5 + sharp + fits * 1.5 - item.get("rank", 0) * 0.04
+
+
 def _pexels_photos(query: str) -> list:
     r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": PEXELS_KEY, **UA},
-                     params={"query": query, "orientation": "portrait", "per_page": 15}, timeout=20)
+                     params={"query": query, "per_page": 40}, timeout=20)
     r.raise_for_status()
-    return [{"url": p["src"].get("large2x") or p["src"]["original"], "credit": f"Photo: {p.get('photographer', 'Pexels')} on Pexels",
-             "link": p.get("url", "")} for p in r.json().get("photos", [])]
+    return [{"id": f"pexels-photo-{p['id']}", "url": p["src"].get("large2x") or p["src"]["original"], "w": p.get("width"), "h": p.get("height"),
+             "about": f"{p.get('alt', '')} {_describe(p.get('url', ''))}", "rank": n,
+             "credit": f"Photo: {p.get('photographer', 'Pexels')} on Pexels", "link": p.get("url", "")}
+            for n, p in enumerate(r.json().get("photos", []))]
 
 
 def _pexels_videos(query: str) -> list:
     r = requests.get("https://api.pexels.com/v1/videos/search", headers={"Authorization": PEXELS_KEY, **UA},
-                     params={"query": query, "orientation": "portrait", "size": "medium", "per_page": 15}, timeout=20)
+                     params={"query": query, "per_page": 40}, timeout=20)
     r.raise_for_status()
     out = []
-    for v in r.json().get("videos", []):
+    for n, v in enumerate(r.json().get("videos", [])):
         files = [f for f in v.get("video_files", []) if f.get("file_type") == "video/mp4" and f.get("width") and f.get("height")]
-        portrait = [f for f in files if f["height"] >= f["width"]] or files
-        # closest to 1080 wide, never bigger than needed
-        portrait.sort(key=lambda f: (abs(min(f["width"], f["height"]) - 1080), f["width"] * f["height"]))
-        if portrait:
-            out.append({"url": portrait[0]["link"], "credit": f"Video: {v.get('user', {}).get('name', 'Pexels')} on Pexels",
-                        "link": v.get("url", ""), "duration": v.get("duration")})
+        if not files:
+            continue
+        # The file closest to 1080 on its short side, never a huge 4K one
+        files.sort(key=lambda f: (abs(min(f["width"], f["height"]) - 1080), f["width"] * f["height"]))
+        f = files[0]
+        out.append({"id": f"pexels-video-{v['id']}", "url": f["link"], "w": v.get("width") or f["width"], "h": v.get("height") or f["height"],
+                    "about": _describe(v.get("url", "")), "rank": n, "duration": v.get("duration"),
+                    "credit": f"Video: {v.get('user', {}).get('name', 'Pexels')} on Pexels", "link": v.get("url", "")})
     return out
 
 
 def _openverse_photos(query: str) -> list:
     r = requests.get(f"{OPENVERSE}/images/", headers=UA, timeout=25,
-                     params={"q": query, "license": "cc0,by,pdm", "size": "large", "page_size": 15})
+                     params={"q": query, "license": "cc0,by,pdm", "size": "large", "page_size": 20})
     r.raise_for_status()
     out = []
-    for x in r.json().get("results", []):
+    for n, x in enumerate(r.json().get("results", [])):
         if not x.get("url"):
             continue
         lic = (x.get("license") or "").upper()
-        out.append({"url": x["url"], "credit": f"Photo: {x.get('creator') or 'unknown'} ({'CC ' + lic if lic not in ('CC0', 'PDM') else 'public domain'}) via Openverse",
+        out.append({"id": f"ov-{x.get('id')}", "url": x["url"], "w": x.get("width"), "h": x.get("height"), "about": f"{x.get('title', '')} {' '.join(t.get('name', '') for t in (x.get('tags') or [])[:10])}",
+                    "rank": n, "credit": f"Photo: {x.get('creator') or 'unknown'} ({'CC ' + lic if lic not in ('CC0', 'PDM') else 'public domain'}) via Openverse",
                     "link": x.get("foreign_landing_url", "")})
     return out
 
 
-def find_stock(query: str, kind: str = "photo", pick: int = 0) -> dict:
-    """Finds a real photo (or video clip) for a scene, copies it to our storage and returns its address and credit."""
+def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", exclude: list | None = None, seconds: float = 0) -> dict:
+    """Finds the best real photo (or video clip) for a scene: it must show what was searched for, be
+    vertical and sharp, (for clips) last long enough, and not already be used elsewhere in the reel.
+    `pick` steps through the next-best ones for Swap clip. The file is copied to our storage."""
     query = (query or "").strip()[:100]
     if not query:
         raise Exception("Nothing to search for")
-    results, source = [], ""
-    if PEXELS_KEY:
-        try:
-            results = _pexels_videos(query) if kind == "video" else _pexels_photos(query)
-            source = "pexels"
-        except Exception as e:
-            print("Pexels search failed:", e)
-    if not results and kind == "video":
-        raise Exception("Real video clips need a free Pexels key (PEXELS_API_KEY on Render)" if not PEXELS_KEY else "No video clip found for this scene")
-    if not results:
-        results, source = _openverse_photos(query), "openverse"
-    if not results:
-        raise Exception("No photo found for this scene")
-    choice = results[pick % len(results)]
+    exclude = set(exclude or [])
+    searches = [q for q in dict.fromkeys([query, (alt or "").strip(), " ".join(query.split()[:2])]) if q]
+    pool, seen, source = [], set(), ""
+    for q in searches:
+        found = []
+        if PEXELS_KEY:
+            try:
+                found = _pexels_videos(q) if kind == "video" else _pexels_photos(q)
+                source = "pexels"
+            except Exception as e:
+                print("Pexels search failed:", e)
+        if not found and kind != "video":
+            try:
+                found = _openverse_photos(q); source = source or "openverse"
+            except Exception as e:
+                print("Openverse search failed:", e)
+        for it in found:
+            if it["id"] in seen or it["id"] in exclude:
+                continue
+            seen.add(it["id"])
+            it["score"] = _score(it, query, seconds) - (0.8 if q != query else 0)   # backups rank a little lower
+            pool.append(it)
+        if len([p for p in pool if p["score"] >= 4]) >= 6:
+            break
+    if not pool:
+        if kind == "video" and not PEXELS_KEY:
+            raise Exception("Real video clips need a free Pexels key (PEXELS_API_KEY on Render)")
+        raise Exception("No match found for this scene")
+    pool.sort(key=lambda it: -it["score"])
+    choice = pool[pick % len(pool)]
     data = _download(choice["url"])
-    if kind == "video":
-        url = _store(data, "stock", ".mp4", "video/mp4")
-    else:
-        url = _store(data, "stock", ".jpg", "image/jpeg")
-    return {"url": url, "credit": choice["credit"], "link": choice.get("link", ""), "source": source, "options": len(results)}
+    url = _store(data, "stock", ".mp4" if kind == "video" else ".jpg", "video/mp4" if kind == "video" else "image/jpeg")
+    return {"url": url, "id": choice["id"], "credit": choice["credit"], "link": choice.get("link", ""), "source": source, "options": len(pool)}
 
 
 # ── Music ─────────────────────────────────────────────────────────────────
