@@ -22,6 +22,9 @@ type Visuals = "ai" | "photo" | "video";
 type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string; music_query: string };
 
 /** Ideas to start from. They only fill in the brief: any kind of reel can be typed. */
+type Idea = { label: string; brief: string; why?: string };
+type IdeasState = { ideas: Idea[]; day?: string; sources?: string[]; loading: boolean; failed?: boolean };
+/** Used only if today's trending ideas can't be loaded. */
 const IDEAS: { l: string; brief: string }[] = [
   { l: "Destination film", brief: "A slow, cinematic Kyoto reel for couples in cherry blossom season: Fushimi Inari at dawn, the Philosopher's Path, a private tea ceremony, a ryokan garden. End with: Plan your spring escape." },
   { l: "Top 5 list", brief: "5 unforgettable experiences in Bali for couples, numbered: Ubud rice terraces, a private villa breakfast, Uluwatu temple at sunset, a jungle swing, a beach club day." },
@@ -56,6 +59,20 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
   const cancel = useRef(false);
+  // Today's trending ideas (new every day, never repeating); the fixed ones are only a fallback
+  const [ideas, setIdeas] = useState<IdeasState>({ ideas: [], loading: false });
+  const [picked, setPicked] = useState<Idea | null>(null);
+  const loadIdeas = async (fresh = false) => {
+    setIdeas(s => ({ ...s, loading: true, failed: false }));
+    try {
+      const r = await fetch(`${API_ROOT}/reel/ideas${fresh ? "?fresh=true" : ""}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !Array.isArray(d.ideas) || !d.ideas.length) throw new Error(d.detail || "no ideas");
+      setIdeas({ ideas: d.ideas, day: d.day, sources: d.sources, loading: false });
+    } catch { setIdeas(s => ({ ...s, loading: false, failed: true })); }
+  };
+  const ideasAsked = useRef(false);
+  useEffect(() => { if (active && !ideasAsked.current) { ideasAsked.current = true; loadIdeas(); } }, [active]);
   // Every clip search can be cancelled by Stop, and gives up on its own if it takes too long
   const aborts = useRef(new Set<AbortController>());
   const boardReady = board.scenes.filter(s => s.image_path || s.video_path);
@@ -181,10 +198,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
           <div className="flex flex-col gap-4">
             <div><Label t={t}>Describe the reel you want, in your own words</Label>
               <Prompt t={t} rows={4} value={brief} onChange={setBrief} placeholder="Any kind of reel: a slow destination film, a numbered top 5, a day-by-day itinerary, an offer with your price, travel tips, a hotel tour, a fast trend reel... Say the place, the mood and how it should end." />
-              <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 8 }}>
-                <span style={{ fontSize: 12, color: t.FAINT }}>Need an idea?</span>
-                {IDEAS.map(x => <button key={x.l} onClick={() => setBrief(x.brief)} style={{ background: "none", border: "none", padding: 0, color: t.TEAL, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{x.l}</button>)}
-              </div></div>
+              <TrendingIdeas t={t} state={ideas} picked={picked} onMore={() => loadIdeas(true)}
+                onPick={x => { setBrief(x.brief); setPicked(x); }} />
+            </div>
             <div className="flex gap-6 flex-wrap">
               <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45, 60].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
               <div><Label t={t}>Pictures</Label><Chips t={t} value={visuals} options={[{ v: "photo", l: "Real photos" }, { v: "video", l: "Real video clips" }, { v: "ai", l: "AI-made" }]} onChange={setVisuals} /></div>
@@ -412,6 +428,26 @@ function ListenPart({ t, music, start, seconds, fit }: { t: T; music: File; star
     a.play().catch(() => end());
   };
   return <Btn onClick={play} style={{ height: 30 }}>{on ? <Square size={13} /> : <Play size={13} />}{on ? `Stop ${clock(at)} / ${clock(seconds)}` : "Listen"}</Btn>;
+}
+
+/** Today's trending reel ideas: click one to use it, "New ideas" for another fresh set. */
+function TrendingIdeas({ t, state, picked, onPick, onMore }: { t: T; state: IdeasState; picked: Idea | null; onPick: (x: Idea) => void; onMore: () => void }) {
+  const list: Idea[] = state.ideas.length ? state.ideas : state.failed ? IDEAS.map(x => ({ label: x.l, brief: x.brief })) : [];
+  const day = state.day ? new Date(state.day + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
+  const link: CSSProperties = { background: "none", border: "none", padding: 0, color: t.TEAL, fontSize: 12, fontWeight: 600, cursor: "pointer" };
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span style={{ fontSize: 12, color: t.FAINT }}>{state.ideas.length ? `Trending ideas for today${day ? ` · ${day}` : ""}` : "Need an idea?"}</span>
+        {state.loading && !state.ideas.length && <span className="flex items-center gap-1" style={{ fontSize: 12, color: t.MUTED }}><Loader2 size={12} className="animate-spin" />Checking what's trending today…</span>}
+        {list.map(x => <button key={x.label + x.brief.slice(0, 12)} title={x.why || x.brief} onClick={() => onPick(x)}
+          style={{ ...link, textDecoration: picked?.brief === x.brief ? "underline" : "none", textUnderlineOffset: 3 }}>{x.label}</button>)}
+        {(state.ideas.length > 0 || state.failed) && <button onClick={onMore} disabled={state.loading} style={{ ...link, color: t.MUTED, fontWeight: 500, display: "inline-flex", alignItems: "center", gap: 4, opacity: state.loading ? 0.6 : 1 }}>
+          <RefreshCw size={12} className={state.loading ? "animate-spin" : ""} />{state.loading ? "Finding new ideas…" : state.failed && !state.ideas.length ? "Try trending ideas again" : "New ideas"}</button>}
+      </div>
+      {picked?.why && <div style={{ fontSize: 12, color: t.MUTED, marginTop: 6 }}>{picked.why}</div>}
+      {state.ideas.length > 0 && state.sources?.length ? <div style={{ fontSize: 11.5, color: t.FAINT, marginTop: 4 }}>Based on {state.sources.join(", ")}. New ideas every day, never the same ones twice.</div> : null}
+    </div>);
 }
 
 function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {

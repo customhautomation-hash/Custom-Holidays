@@ -412,6 +412,16 @@ class ReelPlanRequest(BaseModel):
     style: str = "film"
 
 
+@router.get("/reel/ideas")
+def reel_ideas(fresh: bool = False):
+    """Fresh reel ideas for today, from what's trending (Google searches, travel news, travellers, the season)."""
+    from creatives.ideas import todays_ideas
+    try:
+        return {"success": True, **todays_ideas(fresh)}
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e) or "Ideas couldn't be made just now")
+
+
 @router.post("/reel/plan")
 def reel_plan(req: ReelPlanRequest):
     """Plans a reel from a brief (scenes, on-screen text, caption, hashtags, music mood)."""
