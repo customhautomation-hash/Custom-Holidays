@@ -4,99 +4,92 @@
  * How it works:
  *  1. The browser takes a picture of the page in the old theme, we switch the theme, and it shows the
  *     new theme on top (the View Transitions API, in Chrome and Edge).
- *  2. A mask on the new theme decides which parts are already visible. The mask comes from one "arrival
- *     time" map: how soon the ink reaches each point. It starts at the button you clicked, and swirling
- *     noise (domain-warped fractal noise, like marbled paper) bends the edge into tendrils and wisps.
- *  3. Each frame of the animation shows everything the ink has reached by then.
- * Browsers without View Transitions, and people who turn off animations in their system, get an
+ *  2. A mask on the new theme decides how much of it shows at each point. The mask is drawn by the graphics
+ *     card (a small WebGL shader): an ink blot that grows from the button you clicked, with a soft, smoky
+ *     edge, swirls that flow as it spreads (marbling), and thin veins of the old colour that dissolve last.
+ *  3. All the frames are drawn ahead of time (when the pointer comes over the button) into one tall image
+ *     that the animation steps through, so the click is instant and nothing loads mid-animation.
+ * Browsers without View Transitions or WebGL, and people who turn off animations in their system, get an
  * instant switch.
  */
 
 const DURATION = 1600;   // ms
 const FRAMES = 48;      // 30 frames a second
 
-// ── Small, fast value noise ───────────────────────────────────────────────
-function makeNoise(seed: number) {
-  const p = new Uint8Array(512);
-  const perm = Array.from({ length: 256 }, (_, i) => i);
-  let s = seed;
-  for (let i = 255; i > 0; i--) { s = (s * 16807) % 2147483647; const j = s % (i + 1); [perm[i], perm[j]] = [perm[j], perm[i]]; }
-  for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
-  const fade = (t: number) => t * t * (3 - 2 * t);
-  const h = (x: number, y: number) => p[(p[x & 255] + y) & 511] / 255;
-  const noise = (x: number, y: number) => {
-    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
-    const u = fade(xf), v = fade(yf);
-    const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-  };
-  return (x: number, y: number, oct = 4) => {
-    let sum = 0, amp = 0.5, f = 1;
-    for (let o = 0; o < oct; o++) { sum += amp * noise(x * f, y * f); f *= 2.03; amp *= 0.5; }
-    return sum / (1 - Math.pow(0.5, oct));      // 0..1
-  };
-}
-
 /**
- * The arrival-time map: 0 = the ink is there at once, 1 = the ink gets there last.
- * Like a drop of ink spreading on wet paper: a growing blot from the button whose edge is
- *  • feathered into fine streaks that point outwards (noise stretched along the direction of travel),
- *  • gently bent into swirls (domain-warped noise, like marbling),
- *  • with a few thin threads of the old colour left behind that close up last.
- * The bends are kept small, so the ink always spreads as one connected front (no stray blobs ahead of it).
+ * The ink, drawn by the graphics card (a WebGL shader) frame by frame, so the shapes really flow:
+ *  • a blot grows from the button; its edge is soft and smoky, not a hard cut-out
+ *  • the swirls move as it spreads (noise pushed around by noise that changes over time, like marbling)
+ *  • thin veins of the old colour run through the ink just behind the edge, then dissolve
+ * All frames go into ONE tall image (a sprite sheet) that the animation steps through, so nothing has
+ * to load mid-animation.
  */
-function arrivalMap(w: number, h: number, ox: number, oy: number) {
-  const fbm = makeNoise(1 + Math.floor(Math.random() * 1e6));
-  const T = new Float32Array(w * h);
-  const aspect = w / h;
-  const far = Math.max(...[[0, 0], [1, 0], [0, 1], [1, 1]].map(([cx, cy]) => Math.hypot((cx - ox) * aspect, cy - oy)));
-  let lo = Infinity, hi = -Infinity;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const u = x / w, v = y / h;
-      const dx = (u - ox) * aspect, dy = v - oy;
-      const r = Math.hypot(dx, dy) / far;                       // 0 at the button, 1 at the farthest corner
-      const ang = Math.atan2(dy, dx);
-      const px = u * aspect * 1.4, py = v * 1.4;
-      // marbling swirl
-      const qx = fbm(px + 1.7, py + 9.2, 3), qy = fbm(px + 8.3, py + 2.8, 3);
-      const swirl = fbm(px + 2.5 * qx, py + 2.5 * qy, 4);
-      // feathered streaks: fine across the direction of travel, long along it
-      const streak = fbm(ang * 22 + 5 * qx, r * 3 + 2.5 * qy, 4);
-      // thin threads of the old colour, left behind and closing last
-      const thread = Math.pow(1 - Math.abs(2 * fbm(px * 2.6 + 6 * qx, py * 2.6 + 6 * qy, 3) - 1), 8);
-      const t = r + (swirl - 0.5) * 0.24 + (streak - 0.5) * (0.06 + 0.15 * Math.min(1, r * 2)) + thread * 0.1;
-      T[y * w + x] = t;
-      if (t < lo) lo = t; if (t > hi) hi = t;
-    }
-  }
-  for (let i = 0; i < T.length; i++) T[i] = (T[i] - lo) / (hi - lo);
-  return T;
-}
+const FRAG = `
+precision highp float;
+uniform vec2 uRes; uniform vec2 uO; uniform float uT; uniform float uSeed; uniform float uAspect;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+float n(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(h(i), h(i+vec2(1,0)), u.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), u.x), u.y); }
+float fbm(vec2 p){ float s = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ s += a*n(p); p = p*2.03 + 17.0; a *= 0.5; } return s/0.97; }
+void main(){
+  vec2 uv = gl_FragCoord.xy / uRes; uv.y = 1.0 - uv.y;
+  vec2 p = vec2(uv.x*uAspect, uv.y);
+  vec2 d = p - vec2(uO.x*uAspect, uO.y);
+  float far = max(max(length(vec2(0.0,0.0)-vec2(uO.x*uAspect,uO.y)), length(vec2(uAspect,0.0)-vec2(uO.x*uAspect,uO.y))),
+                  max(length(vec2(0.0,1.0)-vec2(uO.x*uAspect,uO.y)), length(vec2(uAspect,1.0)-vec2(uO.x*uAspect,uO.y))));
+  float r = length(d)/far;
+  float t = uT;
+  // flowing marbling: the warp itself drifts outwards with the ink
+  vec2 q = vec2(fbm(p*2.2 + vec2(0.0, t*0.8)), fbm(p*2.2 + vec2(5.2, 1.3) - vec2(t*0.6, 0.0)));
+  vec2 w = vec2(fbm(p*2.0 + 3.5*q + vec2(1.7, 9.2) + t*0.5), fbm(p*2.0 + 3.5*q + vec2(8.3, 2.8) - t*0.4));
+  float marble = fbm(p*1.6 + 3.0*w);
+  // torn, feathery fringes pointing outwards
+  float ang = atan(d.y, d.x);
+  float fringe = fbm(vec2(ang*9.0 + 2.0*w.x, r*5.0 - t*2.0));
+  float f = r + (marble - 0.5)*0.26 + (fringe - 0.5)*0.12*smoothstep(0.0, 0.3, r);
+  // the front: starts at once, sweeps, settles
+  float front = -0.06 + 1.3*(1.0 - pow(1.0 - t, 1.35));
+  float behind = front - f;                                   // > 0: the ink has arrived here
+  float a = smoothstep(-0.012, 0.035, behind);                   // soft, smoky edge
+  // translucent smoke just at the edge
+  float smoke = fbm(p*4.0 + 3.0*w + t);
+  a *= mix(1.0, smoothstep(0.3, 0.7, smoke), 1.0 - smoothstep(0.0, 0.05, behind));
+  // veins of the old colour inside the ink, fading as the ink settles
+  float vein = 1.0 - abs(2.0*fbm(p*3.0 + 5.0*w) - 1.0);
+  vein = smoothstep(0.88, 0.98, vein);
+  a *= 1.0 - vein*(1.0 - smoothstep(0.02, 0.18, behind))*0.95;
+  if (t >= 1.0) a = 1.0;
+  gl_FragColor = vec4(0.0, 0.0, 0.0, a);
+}`;
 
-// Starts at once (a drop landing), sweeps steadily, then settles gently as the last threads close
-const easeInOut = (x: number) => 1 - Math.pow(1 - x, 1.6);
-
-/**
- * Makes all the mask frames as ONE tall image (a sprite sheet), then stretched to the screen.
- * The animation steps through it by moving it, so no new image has to load mid-animation (no flicker).
- */
 type Sprite = { url: string; img: HTMLImageElement; key: string };
 async function maskSprite(ox: number, oy: number): Promise<Sprite> {
   const w = 640, h = Math.max(160, Math.round(640 * window.innerHeight / Math.max(1, window.innerWidth)));
-  const T = arrivalMap(w, h, ox, oy);
+  const gc = document.createElement("canvas"); gc.width = w; gc.height = h;
+  const gl = gc.getContext("webgl", { premultipliedAlpha: false, preserveDrawingBuffer: true }) as WebGLRenderingContext | null;
+  if (!gl) throw new Error("no webgl");
+  const sh = (type: number, src: string) => { const x = gl.createShader(type)!; gl.shaderSource(x, src); gl.compileShader(x);
+    if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x) || "shader"); return x; };
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, "attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }"));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = (name: string) => gl.getUniformLocation(prog, name);
+  gl.uniform2f(U("uRes"), w, h); gl.uniform2f(U("uO"), ox, oy); gl.uniform1f(U("uAspect"), w / h);
+  gl.uniform1f(U("uSeed"), Math.random() * 100);
+  gl.viewport(0, 0, w, h);
   const c = document.createElement("canvas"); c.width = w; c.height = h * (FRAMES + 1);
   const ctx = c.getContext("2d")!;
-  const img = ctx.createImageData(w, h);
-  const edge = 0.006;                                   // a crisp, slightly soft ink edge
   for (let k = 0; k <= FRAMES; k++) {
-    const th = easeInOut(k / FRAMES) * (1 + 2 * edge) - edge;
-    for (let i = 0, j = 0; i < T.length; i++, j += 4) {
-      const a = k === FRAMES ? 1 : Math.max(0, Math.min(1, (th - T[i]) / edge + 0.5));
-      img.data[j + 3] = Math.round(a * 255);
-    }
-    ctx.putImageData(img, 0, k * h);
+    gl.uniform1f(U("uT"), k / FRAMES);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    ctx.drawImage(gc, 0, k * h);
   }
+  (gl.getExtension("WEBGL_lose_context") as any)?.loseContext();
   const blob = await new Promise<Blob | null>(res => c.toBlob(res, "image/png"));
   if (!blob) throw new Error("mask");
   const url = URL.createObjectURL(blob);
@@ -138,7 +131,11 @@ export async function inkSwitch(apply: () => void, from?: { x: number; y: number
   running = true;
   const x = from?.x ?? window.innerWidth - 60, y = from?.y ?? 40;
   let sprite: Sprite;
-  try { sprite = await prepare(x / window.innerWidth, y / window.innerHeight); }
+  try {
+    // If the pattern isn't ready within a moment (a slow computer, no hover first), switch plainly this time
+    const slow = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("slow")), 700));
+    sprite = await Promise.race([prepare(x / window.innerWidth, y / window.innerHeight), slow]);
+  }
   catch { running = false; apply(); return; }
   ready = null; readyKey = "";                          // a fresh pattern next time
 
