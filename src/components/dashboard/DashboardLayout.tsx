@@ -1,5 +1,6 @@
 import { SidebarTrigger } from "../../components/ui/sidebar";
 import { RefreshCw, Moon, Sun, HelpCircle } from "lucide-react";
+import { warmInk } from "@/lib/inkTransition";
 import { useState, useCallback, useContext } from "react";
 import { PageVisible } from "../AppGuards";
 import { useAuth } from "../../hooks/useAuth";
@@ -88,7 +89,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
 
           {/* Dark / Light toggle */}
-          <button onClick={toggleDark} title={dark ? "Light mode" : "Dark mode"} style={btnStyle}>
+          <button onClick={toggleDark} onPointerEnter={e => warmInk(e.currentTarget)} onFocus={e => warmInk(e.currentTarget)} title={dark ? "Light mode" : "Dark mode"} style={btnStyle}>
             {dark
               ? <Sun  style={{ width: 15, height: 15 }} />
               : <Moon style={{ width: 15, height: 15 }} />}
