@@ -11,36 +11,30 @@ import { Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDow
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
-import { W, H, END, ReelLook, TextStyle, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
+import { W, H, END, ReelLook, TextFormat, PACE_FADE, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, recordFormat, totalOf } from "@/lib/reelEngine";
 
 type BoardScene = { scene: number; image_prompt: string; video_prompt: string; image_path: string | null; video_path: string | null };
 type Clip = { id: string; image_prompt: string; video_prompt: string; text: string; seconds: number; image: string | null; video: string | null; status: "waiting" | "picture" | "video" | "ready" | "error"; note: string };
-type Plan = { title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string };
+type Plan = { kind: string; title: string; end_line: string; caption: string; hashtags: string[]; music_mood: string };
 
-/** Kinds of reel. Each one changes how the plan is written, how text looks and how fast clips change. */
-const STYLES: { k: string; l: string; hint: string; text: TextStyle; fade: number; example: string }[] = [
-  { k: "film", l: "Destination film", hint: "Slow and cinematic, a short line on each clip", text: "caption", fade: 0.45,
-    example: "Kyoto in cherry blossom season for couples. Calm and luxurious: Fushimi Inari at dawn, the Philosopher's Path, a private tea ceremony, a ryokan garden. End with: Plan your spring escape." },
-  { k: "list", l: "Top list", hint: "\"5 things to do in…\", numbered clips", text: "label", fade: 0.35,
-    example: "5 unforgettable experiences in Bali for couples: Ubud rice terraces, a private villa breakfast, Uluwatu temple at sunset, a jungle swing, a beach club day." },
-  { k: "days", l: "Day by day", hint: "An itinerary: Day 1, Day 2…", text: "label", fade: 0.35,
-    example: "7 days in Switzerland for a family: Zurich, Lucerne, the Glacier Express, Zermatt and the Matterhorn, Interlaken, Jungfraujoch." },
-  { k: "hotel", l: "Hotel spotlight", hint: "One property: villa, pool, dining, spa", text: "caption", fade: 0.45,
-    example: "Soneva Jani, Maldives: overwater villa with a slide, the lagoon from above, sunset dinner on the deck, the observatory, spa by the sea." },
-  { k: "offer", l: "Offer", hint: "A package with your price and dates", text: "bold", fade: 0.3,
-    example: "Dubai long weekend offer: 4 nights at Atlantis The Royal, private transfers, desert safari and breakfast daily. From ₹1.85L per couple. Valid till 31 March. Message us to book." },
-  { k: "fast", l: "Fast and punchy", hint: "Quick cuts, 1–3 bold words", text: "bold", fade: 0.2,
-    example: "Santorini in summer, fast and fun: white houses, blue domes, boat trip, sunset in Oia, cliffside pool, wine tasting." },
+/** Ideas to start from. They only fill in the brief: any kind of reel can be typed. */
+const IDEAS: { l: string; brief: string }[] = [
+  { l: "Destination film", brief: "A slow, cinematic Kyoto reel for couples in cherry blossom season: Fushimi Inari at dawn, the Philosopher's Path, a private tea ceremony, a ryokan garden. End with: Plan your spring escape." },
+  { l: "Top 5 list", brief: "5 unforgettable experiences in Bali for couples, numbered: Ubud rice terraces, a private villa breakfast, Uluwatu temple at sunset, a jungle swing, a beach club day." },
+  { l: "Day by day", brief: "7 days in Switzerland for a family, day by day: Zurich, Lucerne, the Glacier Express, Zermatt and the Matterhorn, Interlaken, Jungfraujoch." },
+  { l: "Offer", brief: "Dubai long weekend offer: 4 nights at Atlantis The Royal, private transfers, desert safari and breakfast daily. From ₹1.85L per couple. Valid till 31 March. Bold and simple." },
+  { l: "Travel tips", brief: "Things nobody tells you before your first trip to Japan: carry cash, buy an IC card, trains are silent, tipping isn't done, convenience store food is great. Punchy and fun." },
+  { l: "Fast trend reel", brief: "Fast, energetic Santorini reel with quick cuts and one or two words per clip: white houses, blue domes, boat trip, sunset in Oia, cliffside pool." },
 ];
 
 const uid = () => Math.random().toString(36).slice(2, 9);
-const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; videoOn: boolean; board: { dest: string; scenes: BoardScene[] }; active?: boolean }) {
   const [brief, setBrief] = useState("");
   const [seconds, setSeconds] = useState(30);
-  const [style, setStyle] = useState("film");
-  const S = STYLES.find(x => x.k === style) || STYLES[0];
+  const [fmt, setFmt] = useState<TextFormat>({ position: "bottom", font: "serif", size: "medium" });
+  const [pace, setPace] = useState<keyof typeof PACE_FADE>("slow");
   const [source, setSource] = useState<"new" | "board">("new");
   const [opt, setOpt] = useState({ text: true, title: true, logo: true, end: true, music: false, moving: false });
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -65,8 +59,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     setBusy("Planning the reel"); setClips([]); setPlan(null);
     try {
       const n = source === "board" ? boardReady.length : 0;
-      const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n, style });
-      setPlan({ title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood });
+      const { plan: p } = await post("/reel/plan", { brief: brief.trim() || `A luxury travel reel about ${board.dest}`, seconds, clip_count: n });
+      setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood });
+      if (p.format) { setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium" }); setPace(p.format.pace || "slow"); }
       if (p.end_sub) setEndSub(p.end_sub);
       if (source === "board") {
         setClips(boardReady.map((s, i) => ({ id: uid(), image_prompt: s.image_prompt, video_prompt: s.video_prompt, text: p.scenes[i]?.on_screen_text || "",
@@ -105,7 +100,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   };
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
-  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, textStyle: S.text, fade: S.fade };
+  const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace] };
   const usable = clips.filter(c => c.video || c.image);
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
 
@@ -114,19 +109,12 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
       <Card pad="20px">
         <div className="grid gap-5 grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-4">
-            <div><Label t={t}>Kind of reel</Label>
-              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))" }}>
-                {STYLES.map(x => (
-                  <button key={x.k} onClick={() => setStyle(x.k)} aria-pressed={style === x.k}
-                    style={{ textAlign: "left", padding: "10px 12px", borderRadius: 12, border: "none", cursor: "pointer", background: style === x.k ? (t.dark ? "#1F6F72" : "#13585B") : t.BG,
-                      color: style === x.k ? "#fff" : t.INK, boxShadow: style === x.k ? "none" : t.BTN }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{x.l}</div>
-                    <div style={{ fontSize: 11.5, marginTop: 2, color: style === x.k ? "rgba(255,255,255,.8)" : t.MUTED, lineHeight: 1.35 }}>{x.hint}</div>
-                  </button>))}
+            <div><Label t={t}>Describe the reel you want, in your own words</Label>
+              <Prompt t={t} rows={4} value={brief} onChange={setBrief} placeholder="Any kind of reel: a slow destination film, a numbered top 5, a day-by-day itinerary, an offer with your price, travel tips, a hotel tour, a fast trend reel... Say the place, the mood and how it should end." />
+              <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 8 }}>
+                <span style={{ fontSize: 12, color: t.FAINT }}>Need an idea?</span>
+                {IDEAS.map(x => <button key={x.l} onClick={() => setBrief(x.brief)} style={{ background: "none", border: "none", padding: 0, color: t.TEAL, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{x.l}</button>)}
               </div></div>
-            <div><div className="flex items-baseline justify-between gap-3"><Label t={t}>What's the reel about?</Label>
-              <button onClick={() => setBrief(S.example)} style={{ background: "none", border: "none", padding: 0, color: t.TEAL, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Use an example</button></div>
-              <Prompt t={t} rows={3} value={brief} onChange={setBrief} placeholder={S.example} /></div>
             <div className="flex gap-6 flex-wrap">
               <div><Label t={t}>Length</Label><Chips t={t} value={seconds} options={[15, 30, 45, 60].map(v => ({ v, l: `${v} sec` }))} onChange={setSeconds} /></div>
               <div><Label t={t}>Clips</Label><Chips t={t} value={source} options={[{ v: "new", l: "New clips from the brief" }, { v: "board", l: `Storyboard clips${boardReady.length ? ` · ${boardReady.length}` : ""}` }]} onChange={setSource} /></div>
@@ -157,8 +145,15 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
           <div className="flex flex-col gap-6 min-w-0">
             <Card pad="18px 20px">
               <div className="flex items-baseline justify-between gap-3" style={{ marginBottom: 6 }}>
-                <b style={{ fontSize: 15 }}>Clips</b><Muted>{usable.length} of {clips.length} ready · {fmt(total)} with the end card</Muted>
+                <b style={{ fontSize: 15 }}>Clips</b><Muted>{usable.length} of {clips.length} ready · {clock(total)} with the end card</Muted>
               </div>
+              {plan?.kind && <div style={{ fontSize: 12.5, color: t.MUTED, marginBottom: 8 }}>Planned as: <b style={{ color: t.INK, fontWeight: 600 }}>{plan.kind}</b></div>}
+              <Row t={t} label="Look"><div className="flex flex-wrap gap-x-5 gap-y-2 items-center">
+                <Mini t={t} label="Text" value={fmt.position} options={[["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]]} onChange={v => setFmt(f => ({ ...f, position: v as any }))} />
+                <Mini t={t} label="Font" value={fmt.font} options={[["serif", "Elegant"], ["sans", "Modern"]]} onChange={v => setFmt(f => ({ ...f, font: v as any }))} />
+                <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
+                <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
+              </div></Row>
               {opt.title && <Row t={t} label="Opening title"><input value={plan?.title || ""} onChange={e => setPlan(p => p && { ...p, title: e.target.value })} placeholder="Short hook on the first clip" style={field(t)} /></Row>}
               {clips.map((c, i) => (
                 <div key={c.id} className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}>
@@ -217,6 +212,11 @@ const field = (t: T): CSSProperties => ({ height: 36, borderRadius: 10, boxShado
 
 function Row({ t, label, children }: { t: T; label: string; children: ReactNode }) {
   return <div className="flex gap-3 items-start" style={{ padding: "12px 0", borderTop: `1px solid ${t.LINE}` }}><span style={{ width: 54, flexShrink: 0, fontSize: 12.5, fontWeight: 600, paddingTop: 9 }}>{label}</span><div className="flex-1 min-w-0 flex">{children}</div></div>;
+}
+function Mini({ t, label, value, options, onChange }: { t: T; label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return <div className="flex items-center gap-1.5"><span style={{ fontSize: 12, color: t.FAINT, marginRight: 2 }}>{label}</span>
+    {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} aria-pressed={value === v} style={{ height: 26, padding: "0 9px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+      background: value === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: value === v ? "#fff" : t.MUTED, boxShadow: value === v ? "none" : t.BTN }}>{l}</button>)}</div>;
 }
 function Toggle({ t, on, onClick, I, label, disabled }: { t: T; on: boolean; onClick: () => void; I: any; label: string; disabled?: boolean }) {
   return <button onClick={onClick} disabled={disabled} aria-pressed={on} style={{ height: 32, padding: "0 12px", borderRadius: 99, border: "none", cursor: disabled ? "default" : "pointer", fontSize: 12.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6,
@@ -281,7 +281,7 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
     if (!ctx || !L) return;
     if (!player.current) { player.current = new ReelPlayer(ctx, L, look, setTime, audio.current); player.current.seek(0); }
     else player.current.update(L, look, audio.current);
-  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.textStyle, look.fade, music]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.text?.position, look.text?.font, look.text?.size, look.fade, music]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { player.current?.pause(); }, []);
   // Stop the preview (and its music) when you leave the Reel tab or the page
   useEffect(() => { if ((!active || !pageVisible) && player.current?.playing) { player.current.pause(); setPlaying(false); } }, [active, pageVisible]);
@@ -307,7 +307,7 @@ function Preview({ t, active, clips, look, music, volume, name }: { t: T; active
       <div className="flex items-center gap-3" style={{ marginTop: 12 }}>
         <button onClick={toggle} disabled={!L || progress != null} aria-label={playing ? "Pause" : "Play"} style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: "#13585B", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
         <input type="range" min={0} max={total || 1} step={0.05} value={time} disabled={!L || progress != null} onChange={e => { player.current?.pause(); setPlaying(false); player.current?.seek(Number(e.target.value)); }} style={{ flex: 1, accentColor: "#13585B" }} aria-label="Position in the reel" />
-        <span style={{ fontSize: 12, color: t.MUTED, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{fmt(time)} / {fmt(total)}</span>
+        <span style={{ fontSize: 12, color: t.MUTED, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{clock(time)} / {clock(total)}</span>
       </div>
       <Btn kind="primary" onClick={doExport} disabled={!L || progress != null} style={{ width: "100%", marginTop: 14 }}>
         {progress != null ? <><Loader2 size={15} className="animate-spin" />Saving the reel · {Math.round(progress * 100)}%</> : <><Download size={15} />Download reel ({fmtInfo.ext.toUpperCase()})</>}</Btn>

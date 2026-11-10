@@ -6,9 +6,12 @@
 export const W = 1080, H = 1920, FPS = 30, FADE = 0.45, END = 3;
 
 export type ReelClip = { kind: "image" | "video"; src: string; seconds: number; text: string };
-/** caption: line at the bottom · label: "1 · Kyoto" / "Day 2 · Hakone" with a gold kicker · bold: big centred words */
-export type TextStyle = "caption" | "label" | "bold";
-export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; textStyle?: TextStyle; fade?: number };
+/** How the words on each clip look. The planner picks these to suit the kind of reel; people can change them. */
+export type TextFormat = { position: "bottom" | "middle" | "top"; font: "serif" | "sans"; size: "small" | "medium" | "large" };
+export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number };
+export const PACE_FADE = { slow: 0.5, medium: 0.35, fast: 0.2 } as const;
+const SIZES = { serif: { small: 64, medium: 82, large: 104 }, sans: { small: 50, medium: 64, large: 96 } };
+const POS_Y = { top: 0.2, middle: 0.5, bottom: 0.8 };
 export type Item = { el: HTMLImageElement | HTMLVideoElement; kind: "image" | "video"; seconds: number; text: string };
 export type Loaded = { items: Item[]; logo: HTMLImageElement | null };
 
@@ -90,32 +93,31 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
     const it = items[i];
     const showTitle = look.showTitle && i === 0 && look.title && lt < Math.min(it.seconds, 3.4);
     const showText = look.showText && it.text && !showTitle;
-    if (showText && look.textStyle === "bold") {
+    const tf: TextFormat = look.text || { position: "bottom", font: "sans", size: "medium" };
+    const shadeTop = showTitle || (showText && tf.position === "top");
+    if (showText && !showTitle && tf.position === "middle") {
       ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fillRect(0, 0, W, H);
     } else if (showTitle || showText) {
-      const g = ctx.createLinearGradient(0, showTitle ? 0 : H * 0.55, 0, showTitle ? H * 0.5 : H);
-      g.addColorStop(showTitle ? 0 : 0, showTitle ? "rgba(0,0,0,.42)" : "rgba(0,0,0,0)");
-      g.addColorStop(1, showTitle ? "rgba(0,0,0,0)" : "rgba(0,0,0,.5)");
-      ctx.fillStyle = g; ctx.fillRect(0, showTitle ? 0 : H * 0.55, W, H * 0.5);
+      const g = ctx.createLinearGradient(0, shadeTop ? 0 : H * 0.55, 0, shadeTop ? H * 0.5 : H);
+      g.addColorStop(0, shadeTop ? "rgba(0,0,0,.42)" : "rgba(0,0,0,0)");
+      g.addColorStop(1, shadeTop ? "rgba(0,0,0,0)" : "rgba(0,0,0,.5)");
+      ctx.fillStyle = g; ctx.fillRect(0, shadeTop ? 0 : H * 0.55, W, H * 0.5);
     }
     if (showTitle) {
       const a = Math.min(ease((lt - 0.2) / 0.5), ease((Math.min(it.seconds, 3.4) - lt) / 0.4));
       textBlock(ctx, look.title, SERIF, 96, H * 0.24, a);
     } else if (showText) {
       const a = Math.min(ease((lt - 0.2) / 0.4), ease((it.seconds - lt) / 0.3));
-      const style = look.textStyle || "caption";
-      if (style === "bold") {
-        textBlock(ctx, it.text, SANS.replace("600", "800"), 104, H * 0.5, a);
-      } else if (style === "label") {
-        const [kicker, ...rest] = it.text.split(/\s*[·|:–-]\s+/);
-        const main = rest.join(" · ");
-        if (main) {
-          textBlock(ctx, kicker, SANS, 46, H * 0.74, a, "#D4AF5A");
-          textBlock(ctx, main, SERIF, 82, H * 0.8, a);
-        } else textBlock(ctx, it.text, SERIF, 82, H * 0.79, a);
-      } else {
-        textBlock(ctx, it.text, SANS, 60, H * 0.8, a);
-      }
+      const size = SIZES[tf.font][tf.size];
+      const font = tf.font === "serif" ? SERIF : tf.size === "large" ? SANS.replace("600", "800") : SANS;
+      const y = H * POS_Y[tf.position];
+      const parts = it.text.split(/\s+[·|]\s+/);
+      if (parts.length > 1) {
+        ctx.font = font.replace("SIZE", String(size));
+        const lines = Math.min(2, Math.ceil(ctx.measureText(parts.slice(1).join(" · ")).width / (W - 160)) || 1);
+        textBlock(ctx, parts[0], SANS, 46, y - size * (0.55 + 0.3 * lines), a, "#D4AF5A");
+        textBlock(ctx, parts.slice(1).join(" · "), font, size, y, a);
+      } else textBlock(ctx, it.text, font, size, y, a);
     }
   } else if (look.endCard) {
     const lt = t - clipsEnd;
