@@ -162,25 +162,45 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
   }
 }
 
-/** A clip shorter than its slot plays in gentle slow motion (down to half speed) instead of freezing. */
-function clipRate(v: HTMLVideoElement, slot: number) {
-  const d = v.duration || slot;
-  return d >= slot ? 1 : Math.max(0.5, d / slot);
+/**
+ * Every video clip starts rolling a moment before it appears (LEAD), so it is already moving when the
+ * transition brings it in, instead of sitting on a still first frame and then jumping into motion.
+ * It also has to keep moving through the transition out, so it needs to cover LEAD + its slot + the fade.
+ */
+const LEAD = 0.35;
+/** A clip too short for that plays in gentle slow motion (down to half speed) instead of freezing. */
+function clipRate(v: HTMLVideoElement, slot: number, fade = FADE) {
+  const need = LEAD + slot + fade;
+  const d = v.duration || need;
+  return d >= need ? 1 : Math.max(0.5, d / need);
+}
+/** Where in the clip file we should be at reel time t, for a clip whose slot starts at s. */
+function clipTime(v: HTMLVideoElement, it: Item, t: number, s: number, fade = FADE) {
+  return Math.max(0, Math.min((t - s + LEAD) * clipRate(v, it.seconds, fade), (v.duration || it.seconds) - 0.05));
 }
 
 /** Keeps the video clips in step with the reel's clock. */
 function syncVideos(L: Loaded, t: number, playing: boolean, fade = FADE) {
   let start = 0;
-  L.items.forEach((it, i) => {
+  L.items.forEach(it => {
     const s = start; start += it.seconds;
     if (it.kind !== "video") return;
     const v = it.el as HTMLVideoElement;
-    const active = t >= s - 0.05 && t < start + fade;
-    const rate = clipRate(v, it.seconds);
-    const lt = Math.max(0, Math.min((t - s) * rate, (v.duration || it.seconds) - 0.05));
-    if (!active) { if (!v.paused) v.pause(); return; }
-    if (playing) { if (v.playbackRate !== rate) v.playbackRate = rate; if (v.paused) { v.currentTime = lt; v.play().catch(() => {}); } }
-    else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - lt) > 0.08) v.currentTime = lt; }
+    const active = t >= s - LEAD && t < start + fade;
+    if (!active) {
+      if (!v.paused) v.pause();
+      // Coming up soon: wait on the first frame, already decoded, so it can start instantly
+      if (t < s - LEAD && t > s - LEAD - 3 && v.currentTime > 0.05 && !v.seeking) v.currentTime = 0;
+      return;
+    }
+    const rate = clipRate(v, it.seconds, fade);
+    const lt = clipTime(v, it, t, s, fade);
+    if (playing) {
+      if (v.playbackRate !== rate) v.playbackRate = rate;
+      if (lt >= (v.duration || 1e9) - 0.06) { if (!v.paused) v.pause(); return; }      // hold the last frame
+      if (v.paused) { if (Math.abs(v.currentTime - lt) > 0.15) v.currentTime = lt; v.play().catch(() => {}); }
+      else if (Math.abs(v.currentTime - lt) > 0.6 && !v.seeking) v.currentTime = lt;   // only fix real drift
+    } else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - lt) > 0.08) v.currentTime = lt; }
   });
 }
 
@@ -277,8 +297,8 @@ async function seekVideos(L: Loaded, t: number, fade: number) {
     if (it.kind !== "video") return;
     const v = it.el as HTMLVideoElement;
     if (!v.paused) v.pause();
-    if (!(t >= s - 0.05 && t < start + fade)) return;
-    const lt = Math.max(0, Math.min((t - s) * clipRate(v, it.seconds), (v.duration || it.seconds) - 0.04));
+    if (!(t >= s - LEAD && t < start + fade)) return;
+    const lt = clipTime(v, it, t, s, fade);
     if (Math.abs(v.currentTime - lt) < 0.001 && v.readyState >= 2) return;
     waits.push(new Promise<void>(res => {
       const done = () => { clearTimeout(timer); v.removeEventListener("seeked", done); res(); };
