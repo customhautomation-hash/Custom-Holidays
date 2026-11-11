@@ -44,6 +44,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [grade, setGrade] = useState<Grade>("natural");
   const [frame, setFrame] = useState<FrameStyle>("full");
   const [pace, setPace] = useState<keyof typeof PACE_FADE>("slow");
+  const [planPace, setPlanPace] = useState<keyof typeof PACE_FADE>("slow");   // the pace the clip lengths were planned for
   const [transition, setTransition] = useState<Transition>("dissolve");
   const [source, setSource] = useState<"new" | "board">("new");
   const [opt, setOpt] = useState({ text: true, title: true, logo: true, end: true, music: false, moving: false });
@@ -117,7 +118,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
       setPlan({ kind: p.kind || "", title: p.title, end_line: p.end_line, caption: p.caption, hashtags: p.hashtags || [], music_mood: p.music_mood, music_query: p.music_query || "", music_tags: p.music_tags || [], music_energy: p.music_energy || (p.format?.pace === "fast" ? "high" : p.format?.pace === "slow" ? "calm" : "medium") });
       if (p.format) {
         setFmt({ position: p.format.text_position || "bottom", font: p.format.text_font || "serif", size: p.format.text_size || "medium", style: p.format.text_style || "classic" });
-        setPace(p.format.pace || "slow"); setTransition(p.format.transition || "dissolve");
+        setPace(p.format.pace || "slow"); setPlanPace(p.format.pace || "slow"); setTransition(p.format.transition || "dissolve");
         setGrade(p.format.grade || "natural"); setFrame(p.format.frame || "full");
         // the kind of reel decides whether it ends on our card, shows the logo, has an opening title
         setOpt(o => ({ ...o, end: p.format.end_card !== false, logo: p.format.logo !== false, title: !!p.title, text: p.format.text_style !== "none" || p.scenes.some((x: any) => x.type === "card") }));
@@ -212,7 +213,12 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const move = (i: number, d: number) => setClips(l => { const c = [...l]; const j = i + d; if (j < 0 || j >= c.length) return l; [c[i], c[j]] = [c[j], c[i]]; return c; });
 
   const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace], transition, grade, frame };
-  const usableRaw = clips.filter(c => c.card || c.video || c.image);
+  // Pace changes how long each clip stays on screen (and how soft the transitions are):
+  // relative to the pace the reel was planned at, Fast makes clips about 2.4x shorter than Slow
+  const SPEED = { slow: 1, medium: 1.55, fast: 2.4 } as const;
+  const paceK = SPEED[planPace] / SPEED[pace];
+  const usableRaw = clips.filter(c => c.card || c.video || c.image)
+    .map(c => (paceK === 1 || c.card ? c : { ...c, seconds: Math.max(0.6, Math.round(c.seconds * paceK * 100) / 100) }));
   const beatSeconds = useMemo(() => (opt.music && music && track && onBeat ? fitToBeat(usableRaw.map(c => c.seconds), track, musicStart, beatMode) : null),
     [opt.music, music, track, onBeat, beatMode, musicStart, usableRaw.map(c => c.seconds).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const usable = beatSeconds ? usableRaw.map((c, i) => ({ ...c, seconds: beatSeconds[i] ?? c.seconds })) : usableRaw;
@@ -324,7 +330,10 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                   <Mini t={t} label="Font" value={fmt.font} options={[["serif", "Elegant"], ["sans", "Modern"]]} onChange={v => setFmt(f => ({ ...f, font: v as any }))} />
                   <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
                   <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
-                  <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
+                  <div className="flex flex-col gap-1">
+                    <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
+                    {paceK !== 1 && <span style={{ fontSize: 11.5, color: t.MUTED, paddingLeft: 80 }}>Clips are {paceK < 1 ? `${Math.round((1 / paceK) * 10) / 10}x shorter` : `${Math.round(paceK * 10) / 10}x longer`} than planned · reel {clock(usableRaw.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0))}</span>}
+                  </div>
               </div>
             </Card>
 
