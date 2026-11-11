@@ -245,6 +245,11 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               <Toggle t={t} on={opt.music} onClick={() => toggle("music")} I={Music} label="Music" />
               <Toggle t={t} on={opt.moving} onClick={() => videoOn && toggle("moving")} I={Film} label={videoOn ? "Moving clips (main PC)" : "Moving clips · studio offline"} disabled={!videoOn || source === "board"} />
             </div>
+            {opt.music && <div style={{ marginTop: 12 }}>
+              <MusicDrop t={t} music={music} onFile={f => { setMusic(f); setMusicCredit(""); }} onClear={() => { setMusic(null); setMusicCredit(""); }}
+                label="Drop your music here, or click to choose a file" />
+              <div style={{ marginTop: 6 }}><Muted>{music ? "The clips will change on the beats of this track." : "Optional. Or leave it empty and pick a free track after the reel is planned."}</Muted></div>
+            </div>}
             <div style={{ marginTop: 10 }}><Muted>{opt.moving ? "Moving clips take 3 to 8 minutes each on the main PC. Pictures appear first so you can preview straight away." : "Pictures get a slow, cinematic zoom. Turn on Moving clips for real motion when the video studio is online."}</Muted></div>
           </div>
         </div>
@@ -448,8 +453,7 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
           <RefreshCw size={12} />More tracks</button>}
       </div>
       <ErrorNote t={t} text={err} />
-      <label className="flex items-center gap-3" style={{ cursor: "pointer", fontSize: 12.5, color: t.TEAL, fontWeight: 600 }}>
-        <Upload size={13} />Or upload your own track<input type="file" accept="audio/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f, ""); }} /></label>
+      <MusicDrop t={t} music={null} onFile={f => onPick(f, "")} label="Or drop your own track here, or click to choose one" />
       <label className="flex items-center gap-3" style={{ fontSize: 12.5, color: t.MUTED }}>Volume<input type="range" min={0.1} max={1} step={0.05} value={volume} onChange={e => setVolume(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} /></label>
       <Muted>Instrumental Creative Commons music (CC0 and CC BY only, fine for business use){src === "jamendo" ? ", most popular on Jamendo first" : " via Openverse"}. Teal words show which of the reel's moods a track matches.</Muted>
       {srcNote && <div style={{ fontSize: 12, color: t.MUTED, background: t.BG, boxShadow: t.IN, borderRadius: 10, padding: "8px 10px" }}>{srcNote}</div>}
@@ -509,6 +513,34 @@ function TrendingIdeas({ t, state, picked, onPick, onMore }: { t: T; state: Idea
       </div>
       {picked?.why && <div style={{ fontSize: 12, color: t.MUTED, marginTop: 6 }}>{picked.why}</div>}
       {state.ideas.length > 0 && state.sources?.length ? <div style={{ fontSize: 11.5, color: t.FAINT, marginTop: 4 }}>Based on {state.sources.join(", ")}. New ideas every day, never the same ones twice.</div> : null}
+    </div>);
+}
+
+const AUDIO = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|weba)$/i;
+/** Drop a music file here (or click to choose one). Shows the chosen track with a Remove button. */
+function MusicDrop({ t, music, onFile, onClear, label }: { t: T; music: File | null; onFile: (f: File) => void; onClear?: () => void; label: string }) {
+  const [over, setOver] = useState(false);
+  const [bad, setBad] = useState("");
+  const take = (f?: File | null) => {
+    if (!f) return;
+    if (!(f.type.startsWith("audio/") || AUDIO.test(f.name))) { setBad(`"${f.name}" isn't a music file. Use MP3, WAV, M4A, AAC, OGG or FLAC.`); return; }
+    setBad(""); onFile(f);
+  };
+  if (music && onClear) return (
+    <div className="flex items-center gap-2" style={{ fontSize: 12.5, padding: "9px 12px", borderRadius: 12, background: t.BG, boxShadow: t.IN }}>
+      <Music size={14} color={t.TEAL} /><span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{music.name.replace(/\.[a-z0-9]+$/i, "")}</span>
+      <button onClick={onClear} style={{ background: "none", border: "none", color: t.TEAL, fontWeight: 600, cursor: "pointer", fontSize: 12.5 }}>Remove</button>
+    </div>);
+  return (
+    <div>
+      <label onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+        onDrop={e => { e.preventDefault(); setOver(false); take(e.dataTransfer.files?.[0]); }}
+        className="flex items-center justify-center gap-2" style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: t.TEAL, padding: "12px 14px", borderRadius: 12, textAlign: "center",
+          border: `1.5px dashed ${over ? t.TEAL : t.FAINT}`, background: over ? t.TEAL_BG : "transparent", transition: "background .15s, border-color .15s" }}>
+        <Upload size={14} />{over ? "Drop to use this track" : label}
+        <input type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" style={{ display: "none" }} onChange={e => { take(e.target.files?.[0]); e.target.value = ""; }} />
+      </label>
+      {bad && <div style={{ marginTop: 6, fontSize: 12, color: t.RED }}>{bad}</div>}
     </div>);
 }
 
