@@ -161,20 +161,25 @@ def _thumb(url: str):
 _vision_off_until = 0.0
 
 
-def _gemini_scores(prompt: str, images: list) -> list:
-    """One quick Gemini call (the free key on Render). No slow backup: if it's busy we just don't look."""
-    import json as _json
-    key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+VISION_MODEL = os.getenv("REEL_VISION_MODEL", "nvidia/nemotron-3.5-super-vl:free")
+
+
+def _vision_scores(prompt: str, images: list) -> list:
+    """One call to OpenRouter's free vision model (the OPENROUTER_API_KEY already on Render)."""
+    import json as _json, re as _r
+    key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
     if not key:
-        raise Exception("no GEMINI_API_KEY")
-    model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-    r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", timeout=15,
-                      headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-                      json={"contents": [{"parts": [{"text": prompt}, *[{"inline_data": {"mime_type": m, "data": d}} for m, d in images]]}],
-                            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"}})
+        raise Exception("no OPENROUTER_API_KEY")
+    content = [{"type": "text", "text": prompt + "\nAnswer with the JSON only."}] + \
+              [{"type": "image_url", "image_url": {"url": f"data:{m};base64,{d}"}} for m, d in images]
+    r = requests.post("https://openrouter.ai/api/v1/chat/completions", timeout=45,
+                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                               "HTTP-Referer": "https://custom-holidays.vercel.app", "X-Title": "Custom Holidays Reel maker"},
+                      json={"model": VISION_MODEL, "temperature": 0, "messages": [{"role": "user", "content": content}]})
     if r.status_code >= 400:
-        raise Exception(f"Gemini {r.status_code}")
-    text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        raise Exception(f"OpenRouter {r.status_code}: {r.text[:200]}")
+    text = r.json()["choices"][0]["message"]["content"] or ""
+    text = _r.sub(r"<think>.*?</think>", "", text, flags=_r.S)
     return [float(x) for x in (_json.loads(text[text.find("{"): text.rfind("}") + 1]).get("scores") or [])]
 
 
@@ -186,7 +191,7 @@ def _look_and_rank(cands: list, scene: str, kind: str) -> tuple:
     cands = [c for c in cands if c.get("thumb")][:8]
     if len(cands) < 1 or not scene:
         return cands, "skipped", None
-    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+    if not os.getenv("OPENROUTER_API_KEY"):
         return cands, "off", None
     if _time.time() < _vision_off_until:
         return cands, "busy", None
@@ -204,10 +209,10 @@ def _look_and_rank(cands: list, scene: str, kind: str) -> tuple:
               "would look in a premium reel (sharp, well composed, no watermark or text, no awkward posing). "
               'Return ONLY JSON: {"scores": [n1, n2, ...]} in the same order.')
     try:
-        scores = _gemini_scores(prompt, [t for _, t in keep])
+        scores = _vision_scores(prompt, [t for _, t in keep])
     except Exception as e:
         print("Clip look-check skipped:", e)
-        if "429" in str(e) or "timed out" in str(e).lower() or "503" in str(e):
+        if any(x in str(e) for x in ("429", "503", "502")) or "timed out" in str(e).lower():
             _vision_off_until = _time.time() + 120     # busy or over the free limit: rest it for 2 minutes
         return cands, "busy", None
     if len(scores) != len(keep):

@@ -305,7 +305,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                     {c.credit && <div style={{ fontSize: 11.5, color: t.FAINT }}>{c.credit}{c.check === "ok" ? <span style={{ color: t.TEAL }}> · checked by AI: matches</span>
                       : c.check === "weak" ? <span style={{ color: t.GOLD }}> · the closest match found; try Swap clip or change the search</span>
                       : c.check === "busy" ? " · not checked by AI (busy right now); Swap clip if it doesn't fit"
-                      : c.check === "off" ? " · not checked by AI: add GEMINI_API_KEY on Render" : ""}</div>}
+                      : c.check === "off" ? " · not checked by AI: OPENROUTER_API_KEY is missing on Render" : ""}</div>}
                   </div>
                 </div>))}
               {opt.end && <Row t={t} label="End card"><div className="flex flex-col gap-2 w-full">
