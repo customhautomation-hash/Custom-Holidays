@@ -217,8 +217,12 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   // relative to the pace the reel was planned at, Fast makes clips about 2.4x shorter than Slow
   const SPEED = { slow: 1, medium: 1.55, fast: 2.4 } as const;
   const paceK = SPEED[planPace] / SPEED[pace];
-  const usableRaw = clips.filter(c => c.card || c.video || c.image)
-    .map(c => (paceK === 1 || c.card ? c : { ...c, seconds: Math.max(0.6, Math.round(c.seconds * paceK * 100) / 100) }));
+  const changePace = (next: keyof typeof PACE_FADE) => {
+    const k = SPEED[pace] / SPEED[next];
+    if (k !== 1) setClips(l => l.map(c => (c.card ? c : { ...c, seconds: Math.max(0.6, Math.round(c.seconds * k * 10) / 10) })));
+    setPace(next);
+  };
+  const usableRaw = clips.filter(c => c.card || c.video || c.image);
   const beatSeconds = useMemo(() => (opt.music && music && track && onBeat ? fitToBeat(usableRaw.map(c => c.seconds), track, musicStart, beatMode) : null),
     [opt.music, music, track, onBeat, beatMode, musicStart, usableRaw.map(c => c.seconds).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const usable = beatSeconds ? usableRaw.map((c, i) => ({ ...c, seconds: beatSeconds[i] ?? c.seconds })) : usableRaw;
@@ -331,8 +335,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                   <Mini t={t} label="Size" value={fmt.size} options={[["small", "S"], ["medium", "M"], ["large", "L"]]} onChange={v => setFmt(f => ({ ...f, size: v as any }))} />
                   <Mini t={t} label="Transition" value={transition} options={[["dissolve", "Dissolve"], ["slide", "Slide"], ["zoom", "Zoom"], ["cut", "Cut"]]} onChange={v => setTransition(v as Transition)} />
                   <div className="flex flex-col gap-1">
-                    <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => setPace(v as any)} />
-                    {paceK !== 1 && <span style={{ fontSize: 11.5, color: t.MUTED, paddingLeft: 80 }}>Clips are {paceK < 1 ? `${Math.round((1 / paceK) * 10) / 10}x shorter` : `${Math.round(paceK * 10) / 10}x longer`} than planned · reel {clock(usableRaw.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0))}</span>}
+                    <Mini t={t} label="Pace" value={pace} options={[["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]]} onChange={v => changePace(v as any)} />
+                    {paceK !== 1 && <span style={{ fontSize: 11.5, color: t.MUTED, paddingLeft: 80 }}>Clips are {paceK < 1 ? `${Math.round((1 / paceK) * 10) / 10}x shorter` : `${Math.round(paceK * 10) / 10}x longer`} than planned · reel {clock(total)}</span>}
                   </div>
               </div>
             </Card>
@@ -358,11 +362,13 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                         <IconBtn t={t} title="Remove" onClick={() => setClips(l => l.filter(x => x.id !== c.id))}><X size={13} /></IconBtn>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <input value={c.text} onChange={e => upd(c.id, { text: e.target.value })} placeholder={c.card ? "Words on the card" : opt.text ? "Text on this clip (optional)" : "Text on clips is switched off"} disabled={!opt.text && !c.card} style={{ ...field(t), flex: 1 }} />
                       <select value={c.seconds} onChange={e => upd(c.id, { seconds: Number(e.target.value) })} title="How long this clip shows" style={{ ...field(t), width: 96, flex: "none" }}>
                         {[0.8, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30].concat(c.seconds).filter((v, k, a) => a.indexOf(v) === k).sort((a, b) => a - b).map(v => <option key={v} value={v}>{v} sec</option>)}
                       </select>
+                      {(() => { const u = usable.find(x => x.id === c.id); return u && Math.abs(u.seconds - c.seconds) > 0.04
+                        ? <span title="How long it really plays, after snapping to the beat" style={{ fontSize: 11.5, color: t.TEAL, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", gap: 4 }}><Music size={11} />{u.seconds.toFixed(2)} s</span> : null; })()}
                     </div>
                     {c.note && <div style={{ fontSize: 12, color: c.status === "error" ? t.RED : t.MUTED }}>{c.note}</div>}
                     {!c.card && <SwapRow t={t} c={c} kind={clipKind(c)} busy={c.status === "picture" || c.status === "video"} onSwap={(k, q) => swapClip(c, k, q)} />}
