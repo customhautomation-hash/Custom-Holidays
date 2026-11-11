@@ -213,8 +213,11 @@ def _look_and_rank(cands: list, scene: str, kind: str) -> tuple:
         scores = _vision_scores(prompt, [t for _, t in keep])
     except Exception as e:
         print("Clip look-check skipped:", e)
-        if any(x in str(e) for x in ("429", "503", "502")) or "timed out" in str(e).lower():
-            _vision_off_until = _time.time() + 120     # busy or over the free limit: rest it for 2 minutes
+        low = str(e).lower()
+        if "429" in low and ("per-day" in low or "per day" in low or "free-models-per" in low):
+            _vision_off_until = _time.time() + 6 * 3600   # daily free limit used up: leave the rest for the planner
+        elif any(x in low for x in ("429", "503", "502")) or "timed out" in low:
+            _vision_off_until = _time.time() + 120     # busy: rest it for 2 minutes
         return cands, "busy", None
     if len(scores) != len(keep):
         return cands, "skipped", None

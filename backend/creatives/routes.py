@@ -430,7 +430,11 @@ def reel_plan(req: ReelPlanRequest):
     try:
         return {"success": True, "plan": plan_reel(req.brief.strip(), req.seconds, req.clip_count, req.style)}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e) if "reel" in str(e).lower() else "The reel couldn't be planned just now. Please try again in a minute")
+        from creatives.qwen import AIUnavailable
+        print("Reel plan failed:", e)
+        if isinstance(e, AIUnavailable):
+            raise HTTPException(status_code=422, detail=f"The reel couldn't be planned: {e}")
+        raise HTTPException(status_code=422, detail=str(e) if "reel" in str(e).lower() else "The reel couldn't be planned just now. Please try again in a minute")
 
 
 class StockRequest(BaseModel):

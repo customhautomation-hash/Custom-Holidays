@@ -23,19 +23,61 @@ def safe_parse(text):
     return json.loads(text[start:end + 1])
 
 
+class AIUnavailable(Exception):
+    """OpenRouter refused or failed; the message says why in plain words."""
+
+
+# Free models to fall back on, in order, when the main one is busy or gone (OpenRouter's free list changes).
+# Override with REEL_FALLBACK_MODELS on Render (comma-separated).
+FALLBACK_MODELS = [m.strip() for m in os.getenv("REEL_FALLBACK_MODELS",
+    "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,qwen/qwen3-235b-a22b:free,google/gemma-3-27b-it:free").split(",") if m.strip()]
+
+
+def _why(status: int, text: str) -> str:
+    t = (text or "").lower()
+    if status == 429 and ("per-day" in t or "per day" in t or "daily" in t or "free-models-per" in t):
+        return ("OpenRouter's free daily limit is used up (free accounts get 50 free-model requests a day, "
+                "and the reel planner and clip checker share them). It resets at midnight UTC (5:30 am India time). "
+                "Adding $10 of credit on openrouter.ai raises the free limit to 1,000 a day.")
+    if status == 429:
+        return "OpenRouter's free models are busy right now. Try again in a minute."
+    if status in (401, 403):
+        return "OpenRouter refused the key. Check OPENROUTER_API_KEY on Render."
+    if status == 402:
+        return "OpenRouter says the account needs credit for this model."
+    if status == 404:
+        return "That free AI model isn't available on OpenRouter any more."
+    return f"OpenRouter had a problem ({status})."
+
+
 def _chat(messages, timeout=120, model=None):
-    response = requests.post(
-        OPENROUTER_URL,
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={"model": model or MODEL, "messages": messages},
-        timeout=timeout,
-    )
-    if not response.ok:
-        raise Exception(f"OpenRouter error: {response.text}")
-    return response.json()["choices"][0]["message"]["content"]
+    """Asks OpenRouter; if the model is busy, gone or failing, tries the free fallback models in turn.
+    A daily-limit answer stops at once (every free model shares that limit)."""
+    first = model or MODEL
+    reasons = []
+    for m in list(dict.fromkeys([first, *FALLBACK_MODELS])):
+        try:
+            response = requests.post(OPENROUTER_URL, timeout=timeout,
+                                     headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                                     json={"model": m, "messages": messages})
+        except requests.exceptions.Timeout:
+            reasons.append(f"{m}: took too long"); continue
+        except Exception as e:
+            reasons.append(f"{m}: {e}"); continue
+        if response.ok:
+            try:
+                content = response.json()["choices"][0]["message"]["content"]
+            except Exception:
+                content = None
+            if content:
+                return content
+            reasons.append(f"{m}: empty answer"); continue
+        why = _why(response.status_code, response.text)
+        print("OpenRouter", m, response.status_code, response.text[:300])
+        if "daily limit" in why or response.status_code in (401, 403):
+            raise AIUnavailable(why)
+        reasons.append(why)
+    raise AIUnavailable(reasons[-1] if reasons else "OpenRouter didn't answer.")
 
 
 def generate_storyboard(destination):
