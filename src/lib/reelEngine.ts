@@ -3,7 +3,7 @@
  * Pictures get a slow zoom ("Ken Burns"), clips cross-fade, text sits on a soft shade, the logo is in the
  * corner and an end card closes the reel. The same drawing is used for the preview and the export.
  */
-import { MusicFit, gainAt, scheduleGain } from "./musicFit";
+import { MusicFit, gainAt, scheduleGain, songAt } from "./musicFit";
 
 export const W = 1080, H = 1920, FPS = 30, FADE = 0.45, END = 3;
 
@@ -344,7 +344,7 @@ export class ReelPlayer {
               public music?: HTMLAudioElement | null, public fit: MusicFit = NO_FIT) {}
   /** Swap in new clips, text, settings or music without stopping playback. */
   update(L: Loaded, look: ReelLook, music?: HTMLAudioElement | null, fit: MusicFit = this.fit) {
-    const musicChanged = music !== this.music || fit.start !== this.fit.start;
+    const musicChanged = music !== this.music || fit.start !== this.fit.start || JSON.stringify(fit.segments || null) !== JSON.stringify(this.fit.segments || null);
     this.L = L; this.look = look; this.fit = fit;
     if (musicChanged) { this.music?.pause(); this.music = music; if (this.playing) this.startMusic(); }
     if (this.t > this.total) this.t = this.total;
@@ -354,12 +354,11 @@ export class ReelPlayer {
   draw() { drawAt(this.ctx, this.t, this.L, this.look); }
   private musicTime(t: number) {
     const m = this.music; if (!m) return 0;
-    const len = (m.duration || 1e9) - this.fit.start;
-    return this.fit.start + (this.fit.loop && len > 0 ? t % len : t);
+    return songAt(t, this.fit, m.duration || 1e9);
   }
   private startMusic() {
     const m = this.music; if (!m) return;
-    m.loop = this.fit.loop; m.currentTime = this.musicTime(this.t); m.volume = gainAt(this.t, this.total, this.fit);
+    m.loop = this.fit.loop && !this.fit.segments?.length; m.currentTime = this.musicTime(this.t); m.volume = gainAt(this.t, this.total, this.fit);
     m.play().catch(() => {});
   }
   seek(t: number) { this.t = Math.max(0, Math.min(t, this.total)); syncVideos(this.L, this.t, false, this.look.fade); if (this.music) this.music.currentTime = this.musicTime(this.t); this.draw(); this.onTime?.(this.t); }
@@ -371,7 +370,11 @@ export class ReelPlayer {
       if (!this.playing) return;
       this.t = (performance.now() - this.t0) / 1000;
       if (this.t >= this.total) { this.t = this.total; this.draw(); this.pause(); this.onTime?.(this.t); onEnd?.(); return; }
-      if (this.music) this.music.volume = Math.max(0, Math.min(1, gainAt(this.t, this.total, this.fit)));
+      if (this.music) {
+        this.music.volume = Math.max(0, Math.min(1, gainAt(this.t, this.total, this.fit)));
+        // pieces of the song (repeat / stitched part): jump to the right place when one piece ends
+        if (this.fit.segments?.length && !this.music.seeking && Math.abs(this.music.currentTime - this.musicTime(this.t)) > 0.2) this.music.currentTime = this.musicTime(this.t);
+      }
       syncVideos(this.L, this.t, true, this.look.fade); this.draw(); this.onTime?.(this.t);
       this.raf = requestAnimationFrame(tick);
     };
@@ -469,12 +472,24 @@ export async function exportReelFrames(L: Loaded, look: ReelLook, music: File | 
     const decoded = await ac.decodeAudioData(await music.arrayBuffer());
     ac.close();
     const off = new OfflineAudioContext(2, Math.ceil(total * SR), SR);
-    const src = off.createBufferSource(); src.buffer = decoded;
-    const start = Math.min(fit.start, Math.max(0, decoded.duration - 0.5));
-    if (fit.loop || decoded.duration - start < total) { src.loop = true; src.loopStart = start; src.loopEnd = decoded.duration; }
     const g = off.createGain();
     scheduleGain(g.gain, total, fit, 0);
-    src.connect(g); g.connect(off.destination); src.start(0, start);
+    g.connect(off.destination);
+    if (fit.segments?.length) {
+      // each piece of the song is placed exactly at its time in the reel
+      let at = 0;
+      for (const sg of fit.segments) {
+        if (at >= total) break;
+        const src = off.createBufferSource(); src.buffer = decoded; src.connect(g);
+        src.start(at, Math.min(sg.from, Math.max(0, decoded.duration - 0.1)), Math.min(sg.len, total - at) + 0.05);
+        at += sg.len;
+      }
+    } else {
+      const src = off.createBufferSource(); src.buffer = decoded;
+      const start = Math.min(fit.start, Math.max(0, decoded.duration - 0.5));
+      if (fit.loop || decoded.duration - start < total) { src.loop = true; src.loopStart = start; src.loopEnd = decoded.duration; }
+      src.connect(g); src.start(0, start);
+    }
     audioBuf = await off.startRendering();
     for (const codec of ["mp4a.40.2", "opus"]) {
       const cfg = { codec, sampleRate: SR, numberOfChannels: 2, bitrate: 160_000 };

@@ -8,8 +8,34 @@
  *                  finishes exactly when the reel ends (over the end card), so it never stops abruptly
  */
 export type TrackInfo = { duration: number; bpm: number; beat: number; beats: number[]; loud: Float32Array; hop: number; onset?: Float32Array };
-/** length: if set, the music stops (fading out) this many seconds into the reel, before the reel ends */
-export type MusicFit = { start: number; volume: number; fadeIn: number; fadeOut: number; loop: boolean; length?: number };
+/** A piece of the song: `len` seconds starting at `from` (seconds into the song). */
+export type Segment = { from: number; len: number };
+/**
+ * length: if set, the music stops (fading out) this many seconds into the reel, before the reel ends.
+ * segments: if set, the music is these pieces of the song played one after another (repeat a part, or
+ * stitch two parts together); they take over from start/loop.
+ */
+export type MusicFit = { start: number; volume: number; fadeIn: number; fadeOut: number; loop: boolean; length?: number; segments?: Segment[] };
+
+/** Where in the song we are at reel time t. */
+export function songAt(t: number, fit: MusicFit, songLen = 1e9): number {
+  const segs = fit.segments;
+  if (segs?.length) {
+    let at = 0;
+    for (const sg of segs) { if (t < at + sg.len) return sg.from + (t - at); at += sg.len; }
+    const last = segs[segs.length - 1];
+    return Math.min(songLen, last.from + last.len + (t - at));
+  }
+  const len = songLen - fit.start;
+  return fit.start + (fit.loop && len > 0 ? t % len : t);
+}
+
+/** Reel times where one piece of the song hands over to the next. */
+export function segmentEdges(fit: MusicFit): number[] {
+  const out: number[] = []; let at = 0;
+  for (const sg of (fit.segments || []).slice(0, -1)) { at += sg.len; out.push(at); }
+  return out;
+}
 
 /** Reads the beat and loudness of a decoded track. Takes a fraction of a second. */
 export function analyseTrack(buf: AudioBuffer): TrackInfo {
@@ -178,6 +204,8 @@ export function gainAt(t: number, total: number, fit: MusicFit): number {
   const left = total - t;
   const fo = Math.min(fit.fadeOut, total * 0.4);
   if (left < fo) g *= Math.sin((left / fo) * Math.PI / 2);
+  // a tiny dip where two pieces of the song meet, so the join is smooth instead of a click
+  for (const e of segmentEdges(fit)) { const d = Math.abs(t - e); if (d < 0.06) g *= d / 0.06; }
   return g;
 }
 

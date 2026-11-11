@@ -58,6 +58,9 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const [musicStart, setMusicStart] = useState(0);
   const [musicLen, setMusicLen] = useState(0);      // 0 = the music plays for the whole reel
+  // When the chosen part of the song is shorter than the reel: fade out, repeat that part, or add another part
+  const [fillMode, setFillMode] = useState<"auto" | "fade" | "repeat" | "stitch">("auto");
+  const [start2, setStart2] = useState<number | null>(null);
   const [onBeat, setOnBeat] = useState(true);
   const [beatMode, setBeatMode] = useState<BeatMode>("auto");
   // Words from the song on screen: one line per clip, or timed by tapping along to the music
@@ -246,12 +249,34 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     return out;
   }, [lyricsOn, lyricsText, lyricsMode, opt.title, plan?.title, lyricTimes.join(","), usable.map(c => `${c.seconds}${c.card ? "c" : ""}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalRef = useRef(total); totalRef.current = total;
-  const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total,
-    length: musicLen && musicLen < total - 0.3 ? musicLen : undefined };
+  const songLeft = track ? Math.max(0, track.duration - musicStart) : Infinity;
+  const partLen = musicLen && musicLen < total - 0.3 ? Math.min(musicLen, songLeft) : songLeft;   // the chosen part of the song
+  const songShort = !!track && partLen < total - 0.3;
+  const fillWay: "fade" | "repeat" | "stitch" = fillMode === "auto" ? (musicLen ? "fade" : "repeat") : fillMode;
+  const plan2 = useMemo(() => {
+    if (!songShort || !track || fillWay === "fade") return undefined;
+    const beat = track.beat || 0.5;
+    const L = Math.max(beat, Math.floor(partLen / beat + 0.001) * beat);     // whole beats, so the beat carries on across the join
+    const segs: { from: number; len: number }[] = [{ from: musicStart, len: L }];
+    if (fillWay === "repeat") { for (let a = L; a < total; a += L) segs.push({ from: musicStart, len: L }); }
+    else {
+      const s2 = start2 ?? 0, L2 = Math.max(beat, track.duration - s2);
+      for (let a = L; a < total && segs.length < 40; a += L2) segs.push({ from: s2, len: Math.min(L2, total - a + 0.1) });
+    }
+    return segs;
+  }, [songShort, fillWay, partLen, musicStart, start2, total, track]);
+  const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5,
+    loop: !plan2 && !!track && songLeft < total, length: songShort && fillWay === "fade" ? partLen : undefined, segments: plan2 };
   // The strongest stretches of the song for this reel's length; "Best part" steps through them
   const reelLen = usable.length ? total : seconds;          // before the reel is planned, use the length chosen
   const parts = useMemo(() => (track ? bestParts(track, Math.max(10, reelLen), 3) : []), [track, Math.round(reelLen)]);
   const partNo = parts.findIndex(p => Math.abs(p - musicStart) < 0.05);
+  // part 2 starts at a different strong part of the song (not overlapping part 1)
+  useEffect(() => {
+    if (fillWay !== "stitch" || start2 !== null || !track) return;
+    const alt = parts.find(p => Math.abs(p - musicStart) > partLen) ?? (musicStart > partLen ? 0 : Math.min(track.duration - 5, musicStart + partLen));
+    setStart2(alt);
+  }, [fillWay, start2, track, parts, musicStart, partLen]);
   // The song's timing controls: shown under the upload in the first card, and in the Music card
   const timingBody = (
     <>
@@ -421,7 +446,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
           <div className="flex flex-col gap-6 xl:sticky xl:top-4">
             <Preview t={t} active={active} clips={usable} look={lyrics ? { ...look, lyrics } : look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
             {opt.music && music && track && <SongEditor t={t} track={track} music={music} start={musicStart} setStart={setMusicStart} reelLen={total}
-              len={musicLen && musicLen < total ? musicLen : total} setLen={v => setMusicLen(v >= total - 0.3 ? 0 : v)} fit={fit} parts={parts} partNo={partNo} />}
+              len={musicLen && musicLen < total ? musicLen : total} setLen={v => setMusicLen(v >= total - 0.3 ? 0 : v)} fit={fit} parts={parts} partNo={partNo}
+              short={songShort} partLen={partLen} way={fillWay} setWay={setFillMode} start2={start2 ?? 0} setStart2={setStart2} />}
           </div>
         </div>)}
     </div>
@@ -529,10 +555,12 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
  * uses. Drag the window to choose where the song starts, drag its right edge to end the music earlier.
  * The start snaps onto a beat so the cuts stay on the beat.
  */
-function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fit, parts, partNo }: { t: T; track: TrackInfo; music: File; start: number; setStart: (v: number) => void;
-  reelLen: number; len: number; setLen: (v: number) => void; fit: MusicFit; parts: number[]; partNo: number }) {
+function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fit, parts, partNo, short, partLen, way, setWay, start2, setStart2 }: { t: T; track: TrackInfo; music: File; start: number; setStart: (v: number) => void;
+  reelLen: number; len: number; setLen: (v: number) => void; fit: MusicFit; parts: number[]; partNo: number;
+  short: boolean; partLen: number; way: "fade" | "repeat" | "stitch"; setWay: (v: "fade" | "repeat" | "stitch") => void; start2: number; setStart2: (v: number) => void }) {
   const box = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<null | { kind: "move" | "end"; x0: number; s0: number; l0: number }>(null);
+  const [drag, setDrag] = useState<null | { kind: "move" | "end" | "move2"; x0: number; s0: number; l0: number }>(null);
+  const len2 = Math.max(0, reelLen - partLen);           // how much part 2 has to fill
   const dur = track.duration;
   const BARS = 120;
   const bars = useMemo(() => {
@@ -545,14 +573,15 @@ function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fi
     for (const b of track.beats) { const dd = Math.abs(b - v); if (dd < d) { d = dd; best = b; } if (b > v + 0.3) break; }
     return Math.round(best * 100) / 100;
   };
-  const onDown = (kind: "move" | "end") => (e: RPointerEvent) => {
+  const onDown = (kind: "move" | "end" | "move2") => (e: RPointerEvent) => {
     e.preventDefault(); e.stopPropagation(); (e.target as Element).setPointerCapture?.(e.pointerId);
-    setDrag({ kind, x0: e.clientX, s0: start, l0: len });
+    setDrag({ kind, x0: e.clientX, s0: kind === "move2" ? start2 : start, l0: len });
   };
   const onMove = (e: RPointerEvent) => {
     if (!drag || !box.current) return;
     const secs = ((e.clientX - drag.x0) / box.current.clientWidth) * dur;
     if (drag.kind === "move") setStart(snap(Math.max(0, Math.min(dur - Math.min(len, dur), drag.s0 + secs))));
+    else if (drag.kind === "move2") setStart2(snap(Math.max(0, Math.min(dur - 1, drag.s0 + secs))));
     else setLen(Math.max(3, Math.min(reelLen, Math.round((drag.l0 + secs) * 10) / 10)));
   };
   const onUp = () => setDrag(null);
@@ -579,6 +608,10 @@ function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fi
             return <div key={i} style={{ flex: 1, height: `${Math.max(6, v * 100)}%`, borderRadius: 2, background: on ? t.TEAL : t.FAINT, opacity: on ? 1 : 0.45 }} />;
           })}
         </div>
+        {short && way === "stitch" && <div onPointerDown={onDown("move2")} onClick={e => e.stopPropagation()} title="Part 2: drag to choose which part of the song comes next"
+          style={{ position: "absolute", top: 2, bottom: 2, left: `${(start2 / dur) * 100}%`, width: `${(Math.min(len2, dur - start2) / dur) * 100}%`, minWidth: 12, borderRadius: 9,
+            border: `2px dashed ${t.GOLD}`, background: "rgba(212,175,90,.14)", cursor: drag?.kind === "move2" ? "grabbing" : "grab", boxSizing: "border-box" }}>
+          <span style={{ position: "absolute", top: 2, left: 5, fontSize: 9.5, fontWeight: 700, color: t.GOLD }}>2</span></div>}
         <div onPointerDown={onDown("move")} onClick={e => e.stopPropagation()} title="Drag to choose where the song starts"
           style={{ position: "absolute", top: 2, bottom: 2, left: `${left}%`, width: `${width}%`, minWidth: 14, borderRadius: 9, border: `2px solid ${t.TEAL}`,
             background: "rgba(95,179,174,.12)", cursor: drag?.kind === "move" ? "grabbing" : "grab", boxSizing: "border-box" }}>
@@ -594,7 +627,21 @@ function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fi
         <ListenPart t={t} music={music} start={start} seconds={len} fit={{ ...fit, length: undefined }} />
         {len < reelLen - 0.3 && <Btn onClick={() => setLen(reelLen)} style={{ height: 30 }}>Play to the end</Btn>}
       </div>
-      <div style={{ marginTop: 8 }}><Muted>{len < reelLen - 0.3 ? `The music plays for ${len.toFixed(1)} s and fades out; the reel is ${reelLen.toFixed(1)} s.` : "Drag the window to pick the part of the song. Drag its right edge to end the music earlier."}</Muted></div>
+      {short && <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${t.LINE}` }}>
+        <div style={{ fontSize: 12, color: t.INK, marginBottom: 8 }}>The chosen part is {partLen.toFixed(1)} s but the reel is {reelLen.toFixed(1)} s. When it ends:</div>
+        <div className="flex flex-wrap gap-1.5">
+          {([["fade", "Fade out"], ["repeat", "Repeat this part"], ["stitch", "Add another part"]] as const).map(([v, l]) =>
+            <button key={v} onClick={() => setWay(v)} aria-pressed={way === v} style={{ height: 28, padding: "0 11px", borderRadius: 99, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+              background: way === v ? (t.dark ? "#1F6F72" : "#13585B") : t.BG, color: way === v ? "#fff" : t.MUTED, boxShadow: way === v ? "none" : t.BTN }}>{l}</button>)}
+        </div>
+        <div style={{ marginTop: 8 }}><Muted>{way === "fade" ? "The music fades out early and the rest of the reel is silent."
+          : way === "repeat" ? "The chosen part plays again from its start, joined on the beat, until the reel ends."
+          : `Then part 2 (the dashed window) plays: from ${mmss(start2)}. Drag it to choose a different part.`}</Muted></div>
+        {way === "stitch" && <div className="flex gap-2 flex-wrap" style={{ marginTop: 8 }}>
+          <Btn onClick={() => { const others = parts.filter(p => Math.abs(p - start) > 2); if (others.length) setStart2(others[(Math.max(0, others.findIndex(p => Math.abs(p - start2) < 0.05)) + 1) % others.length]); }} style={{ height: 28 }}>Best part for part 2</Btn>
+        </div>}
+      </div>}
+      {!short && <div style={{ marginTop: 8 }}><Muted>Drag the window to pick the part of the song. Drag its right edge to end the music earlier.</Muted></div>}
     </Card>);
 }
 
