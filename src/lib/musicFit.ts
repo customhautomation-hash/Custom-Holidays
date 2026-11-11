@@ -7,7 +7,7 @@
  *  • gainAt:       the volume at any moment: a short fade in, and a long, smooth fade out that
  *                  finishes exactly when the reel ends (over the end card), so it never stops abruptly
  */
-export type TrackInfo = { duration: number; bpm: number; beat: number; beats: number[]; loud: Float32Array; hop: number };
+export type TrackInfo = { duration: number; bpm: number; beat: number; beats: number[]; loud: Float32Array; hop: number; onset?: Float32Array };
 export type MusicFit = { start: number; volume: number; fadeIn: number; fadeOut: number; loop: boolean };
 
 /** Reads the beat and loudness of a decoded track. Takes a fraction of a second. */
@@ -16,15 +16,17 @@ export function analyseTrack(buf: AudioBuffer): TrackInfo {
   const a = buf.getChannelData(0), b = buf.numberOfChannels > 1 ? buf.getChannelData(1) : a;
   const hopS = 512, hop = hopS / sr;
   const frames = Math.floor(n / hopS);
-  const loud = new Float32Array(frames);
+  const loud = new Float32Array(frames), bass = new Float32Array(frames);
+  const k = 1 - Math.exp(-2 * Math.PI * 150 / sr);       // a simple low-pass at ~150 Hz: the kick drum and bass
+  let lp = 0;
   for (let f = 0; f < frames; f++) {
-    let s = 0; const o = f * hopS;
-    for (let i = 0; i < hopS; i++) { const v = (a[o + i] + b[o + i]) * 0.5; s += v * v; }
-    loud[f] = Math.sqrt(s / hopS);
+    let s = 0, sb = 0; const o = f * hopS;
+    for (let i = 0; i < hopS; i++) { const v = (a[o + i] + b[o + i]) * 0.5; s += v * v; lp += k * (v - lp); sb += lp * lp; }
+    loud[f] = Math.sqrt(s / hopS); bass[f] = Math.sqrt(sb / hopS);
   }
-  // Onsets: where loudness jumps up (a simple, reliable stand-in for drum hits)
+  // Onsets: where the sound jumps up, counting the bass (kick drum) extra: these are the hits you feel
   const onset = new Float32Array(frames);
-  for (let f = 1; f < frames; f++) onset[f] = Math.max(0, loud[f] - loud[f - 1]);
+  for (let f = 1; f < frames; f++) onset[f] = Math.max(0, loud[f] - loud[f - 1]) + 1.6 * Math.max(0, bass[f] - bass[f - 1]);
   // Tempo by autocorrelation between 70 and 170 BPM, gently preferring 90–130
   const minLag = Math.round(60 / 170 / hop), maxLag = Math.round(60 / 70 / hop);
   let bestLag = Math.round(60 / 110 / hop), bestScore = -1;
@@ -35,17 +37,42 @@ export function analyseTrack(buf: AudioBuffer): TrackInfo {
     const pref = 1 - Math.min(0.25, Math.abs(bpm - 110) / 400);
     if (s * pref > bestScore) { bestScore = s * pref; bestLag = lag; }
   }
-  // Phase: where the beats sit
-  let bestOff = 0, offScore = -1;
-  for (let off = 0; off < bestLag; off++) {
-    let s = 0;
-    for (let f = off; f < frames; f += bestLag) s += onset[f];
-    if (s > offScore) { offScore = s; bestOff = off; }
+  // Exact tempo and phase: try tempos a little either side of the rough one (in fine steps) and every
+  // starting point, and keep the beat grid that lands on the most hits across the whole song
+  const hit = (f: number) => { const i = Math.round(f); return Math.max(onset[i] || 0, 0.7 * (onset[i - 1] || 0), 0.7 * (onset[i + 1] || 0)); };
+  let bestP = bestLag, bestOff = 0, gridScore = -1;
+  for (let P = bestLag - 1.2; P <= bestLag + 1.2; P += 0.04) {
+    for (let off = 0; off < P; off += 0.5) {
+      let sc = 0;
+      for (let f = off; f < frames; f += P) sc += hit(f);
+      if (sc > gridScore) { gridScore = sc; bestP = P; bestOff = off; }
+    }
   }
-  const beat = bestLag * hop;
+  const beat = bestP * hop;
+  // Each beat is nudged onto the actual hit nearby (within 60 ms), so cuts land exactly on the drum
+  // even when the tempo drifts a little
+  let peak = 0; for (let f = 0; f < frames; f++) if (onset[f] > peak) peak = onset[f];
+  // Follow the beat through the song: each next beat is looked for one beat-length after the last one
+  // found, and the tempo is updated gently, so a slightly-off tempo or a drifting song stays locked
   const beats: number[] = [];
-  for (let tt = bestOff * hop; tt < buf.duration; tt += beat) beats.push(tt);
-  return { duration: buf.duration, bpm: Math.round(60 / beat), beat, beats, loud, hop };
+  let period = beat;
+  let tt = bestOff * hop;
+  while (tt < buf.duration) {
+    const win = Math.max(1, Math.round((period * 0.18) / hop));
+    const c = Math.round(tt / hop); let bf = c, bv = -1;
+    for (let f = Math.max(0, c - win); f <= Math.min(frames - 1, c + win); f++) {
+      const w = 1 - 0.5 * Math.abs(f - c) / win;           // prefer hits near where the beat was expected
+      if (onset[f] * w > bv) { bv = onset[f] * w; bf = f; }
+    }
+    const found = bv > peak * 0.12 ? bf * hop : tt;
+    if (beats.length && bv > peak * 0.12) {
+      const gap = found - beats[beats.length - 1];
+      if (gap > beat * 0.7 && gap < beat * 1.3) period = period * 0.85 + gap * 0.15;
+    }
+    beats.push(found);
+    tt = found + period;
+  }
+  return { duration: buf.duration, bpm: Math.round(60 / beat), beat, beats, loud, hop, onset };
 }
 
 /**
@@ -90,23 +117,52 @@ export function bestStart(info: TrackInfo, reelSeconds: number): number {
   return bestParts(info, reelSeconds, 1)[0] ?? 0;
 }
 
+export type BeatMode = "auto" | "beat" | "two" | "bar";
+
 /**
- * Moves each cut to the nearest beat (every n beats, n chosen from the clip length), keeping the order
- * and roughly the same total. Clips never get shorter than one beat or 1 second.
+ * Moves every cut onto a beat of the music, keeping the order and roughly the same total.
+ *  auto: each cut goes to the beat nearest its planned time, preferring the strong ones (the first beat of a
+ *        bar, where the music "lands"); short clips cut on single beats, so fast reels flick on every hit
+ *  beat / two / bar: cut only on every beat, every 2nd beat, or every bar (4 beats)
+ * A clip is never shorter than most of one beat.
  */
-export function fitToBeat(seconds: number[], info: TrackInfo, start: number): number[] {
+export function fitToBeat(seconds: number[], info: TrackInfo, start: number, mode: BeatMode = "auto"): number[] {
   if (!seconds.length || !info.beat) return seconds;
-  const avg = seconds.reduce((x, y) => x + y, 0) / seconds.length;
-  const every = Math.max(1, Math.round(avg / info.beat));
-  const grid = info.beats.filter(b => b >= start - 0.01).map(b => b - start).filter((_, i) => i % every === 0);
-  if (grid.length < 2) return seconds;
+  const beats = info.beats.filter(b => b >= start - 0.01).map(b => b - start);
+  if (beats.length < 4) return seconds;
+  // how hard each beat hits
+  const str = beats.map(b => {
+    if (!info.onset) return 1;
+    const f = Math.round((b + start) / info.hop); let m = 0;
+    for (let i = Math.max(0, f - 2); i <= Math.min(info.onset.length - 1, f + 2); i++) m = Math.max(m, info.onset[i]);
+    return m;
+  });
+  const top = Math.max(...str) || 1;
+  // which beat of each 4 is the bar's first (the one that hits hardest on average)
+  let phase = 0, bestSum = -1;
+  for (let p = 0; p < 4; p++) { let sum = 0; for (let i = p; i < beats.length; i += 4) sum += str[i]; if (sum > bestSum) { bestSum = sum; phase = p; } }
+  const step = mode === "two" ? 2 : mode === "bar" ? 4 : 1;
+  const minLen = Math.max(0.3, info.beat * 0.85);
   const out: number[] = [];
   let at = 0, target = 0;
   for (const s of seconds) {
     target += s;
-    let best = grid.find(g => g > at + 0.9) ?? at + s;
-    for (const g of grid) if (g > at + 0.9 && Math.abs(g - target) < Math.abs(best - target)) best = g;
-    out.push(Math.round((best - at) * 100) / 100);
+    let best = -1, bestCost = Infinity;
+    for (let j = 0; j < beats.length; j++) {
+      const g = beats[j];
+      if (g <= at + minLen - 0.001) continue;
+      if (best >= 0 && g > target + 4 * info.beat + 2) break;
+      if (step > 1 && ((j - phase) % step + step) % step !== 0) continue;
+      let cost = Math.abs(g - target);
+      if (mode === "auto") {
+        const bar = ((j - phase) % 4 + 4) % 4 === 0, half = ((j - phase) % 2 + 2) % 2 === 0;
+        // prefer the bar's first beat and strong hits, but only if it's about as close as a plain beat
+        cost -= (bar ? 0.35 : half ? 0.15 : 0) * info.beat * Math.max(0, Math.min(1, (s / info.beat - 1.5) / 2)) + 0.1 * info.beat * (str[j] / top);   // short clips just take the nearest beat
+      }
+      if (cost < bestCost) { bestCost = cost; best = g; }
+    }
+    if (best < 0) best = at + s;
+    out.push(Math.round((best - at) * 1000) / 1000);
     at = best;
   }
   return out;

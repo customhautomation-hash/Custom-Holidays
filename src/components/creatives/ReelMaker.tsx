@@ -11,7 +11,7 @@ import { Maximize2, Minimize2, Upload, RefreshCw, Clapperboard, Play, Pause, Dow
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
 import { Label, Prompt, Chips, ErrorNote } from "@/components/creatives/ui";
 import { API_ROOT } from "@/lib/api";
-import { analyseTrack, bestParts, bestStart, fitToBeat, gainAt, MusicFit, TrackInfo } from "@/lib/musicFit";
+import { analyseTrack, bestParts, bestStart, fitToBeat, gainAt, MusicFit, TrackInfo, BeatMode } from "@/lib/musicFit";
 import { post, srcOf, runVideo, makePicture, downloadBlob, stopOnServer } from "@/lib/creativesApi";
 import { W, H, END, ReelLook, TextFormat, TextStyle, Grade, FrameStyle, Transition, PACE_FADE, loadReelFonts, Loaded, Item, ReelPlayer, loadImage, loadVideo, exportReel, exportReelFrames, recordFormat, totalOf } from "@/lib/reelEngine";
 
@@ -57,6 +57,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const [musicStart, setMusicStart] = useState(0);
   const [onBeat, setOnBeat] = useState(true);
+  const [beatMode, setBeatMode] = useState<BeatMode>("auto");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
@@ -206,8 +207,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
 
   const look: ReelLook = { title: plan?.title || "", showTitle: opt.title, showText: opt.text, showLogo: opt.logo, endCard: opt.end, endLine: plan?.end_line || "", endSub, text: fmt, fade: PACE_FADE[pace], transition, grade, frame };
   const usableRaw = clips.filter(c => c.card || c.video || c.image);
-  const beatSeconds = useMemo(() => (opt.music && music && track && onBeat ? fitToBeat(usableRaw.map(c => c.seconds), track, musicStart) : null),
-    [opt.music, music, track, onBeat, musicStart, usableRaw.map(c => c.seconds).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const beatSeconds = useMemo(() => (opt.music && music && track && onBeat ? fitToBeat(usableRaw.map(c => c.seconds), track, musicStart, beatMode) : null),
+    [opt.music, music, track, onBeat, beatMode, musicStart, usableRaw.map(c => c.seconds).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const usable = beatSeconds ? usableRaw.map((c, i) => ({ ...c, seconds: beatSeconds[i] ?? c.seconds })) : usableRaw;
   const visualCredits = [...new Set(clips.filter(c => c.credit).map(c => c.credit.replace(/^(Photo|Video): /, "")))];
   const creditLine = [visualCredits.length ? `${clips.some(c => c.credit.startsWith("Video")) ? "Footage" : "Photos"}: ${visualCredits.join(", ")}` : "", opt.music && musicCredit ? musicCredit : ""].filter(Boolean).join(" · ");
@@ -334,7 +335,11 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                     {partNo >= 0 && <Muted>{partNo === 0 ? "The strongest part of the song" : `Option ${partNo + 1}`}</Muted>}
                   </div>
                   <Muted>Best part looks at how loud and full the song is moment by moment, and picks the stretch the length of your reel that stays strongest the whole way (usually the chorus or the drop), starting on a beat where the song lifts. Press it again for the next option, and Listen to hear exactly what the reel will use.</Muted>
-                  <label className="flex items-center gap-2" style={{ cursor: "pointer" }}><input type="checkbox" checked={onBeat} onChange={e => setOnBeat(e.target.checked)} style={{ accentColor: "#13585B" }} />Cut the clips on the beat</label>
+                  <Mini t={t} label="Cuts" value={onBeat ? beatMode : "off"} options={[["auto", "On the beat (auto)"], ["beat", "Every beat"], ["two", "Every 2 beats"], ["bar", "Every bar"], ["off", "Off"]]}
+                    onChange={v => { if (v === "off") setOnBeat(false); else { setOnBeat(true); setBeatMode(v as BeatMode); } }} />
+                  <Muted>{!onBeat ? "Clips keep their own lengths." : beatMode === "auto"
+                    ? "Every clip changes exactly on a beat of the song: quick clips flick on each hit, longer ones land on the start of a bar. Works for uploaded tracks too."
+                    : beatMode === "beat" ? "A new clip on every beat (very fast; good for trend reels)." : beatMode === "two" ? "A new clip every 2 beats." : "A new clip every bar (4 beats): calm and cinematic."}</Muted>
                   <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
               </div></Row>}
             </Card>
