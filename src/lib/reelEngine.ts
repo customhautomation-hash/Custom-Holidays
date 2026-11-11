@@ -20,7 +20,9 @@ export type Transition = "dissolve" | "slide" | "zoom" | "cut";
 export type Grade = "natural" | "warm" | "film" | "moody" | "vibrant" | "dreamy";
 /** full: the picture fills the screen · cinematic: black bars top and bottom */
 export type FrameStyle = "full" | "cinematic";
-export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number; transition?: Transition; grade?: Grade; frame?: FrameStyle };
+export type ReelLook = { title: string; showTitle: boolean; showText: boolean; showLogo: boolean; endCard: boolean; endLine: string; endSub: string; text?: TextFormat; fade?: number; transition?: Transition; grade?: Grade; frame?: FrameStyle;
+  /** Words from the song, each shown from `start` to `end` (seconds into the reel). They replace the clips' own words. */
+  lyrics?: { text: string; start: number; end: number }[] };
 export const PACE_FADE = { slow: 0.5, medium: 0.35, fast: 0.2 } as const;
 const SIZES = { serif: { small: 64, medium: 82, large: 104 }, sans: { small: 50, medium: 64, large: 96 } };
 const POS_Y = { top: 0.2, middle: 0.5, bottom: 0.8 };
@@ -219,7 +221,8 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
     const titleLen = style === "meme" ? it.seconds : Math.min(it.seconds, 3.4);
     const showTitle = look.showTitle && i === 0 && !!look.title && lt < titleLen && it.kind !== "card";
     const card = it.kind === "card";
-    const words = card ? it.text : look.showText && !showTitle && style !== "none" ? it.text : "";
+    const lyricsOn = !!look.lyrics?.length;
+    const words = card ? it.text : look.showText && !showTitle && style !== "none" && !lyricsOn ? it.text : "";
     // The same words on neighbouring clips stay on screen, without fading out and in again between them
     const titled0 = look.showTitle && !!look.title;
     const same = (j: number) => j >= 0 && j < items.length && !!it.text && items[j].text === it.text && items[j].kind === it.kind && !(j === 0 && titled0);
@@ -261,6 +264,15 @@ export function drawAt(ctx: CanvasRenderingContext2D, t: number, L: Loaded, look
           textBlock(ctx, parts[0], SANS, 46, y - size * (0.55 + 0.3 * lines), a, "#D4AF5A");
           textBlock(ctx, parts.slice(1).join(" · "), font, size, y, a);
         } else textBlock(ctx, it.text, font, size, y, a);
+      }
+    }
+    if (lyricsOn && !card && !showTitle) {
+      // the song's words: each line fades in quickly at its time and out just before the next
+      const line = look.lyrics!.find(l => t >= l.start && t < l.end);
+      if (line && line.text) {
+        const a = Math.min(ease((t - line.start) / 0.12), ease((line.end - t) / 0.12));
+        const ls: TextStyle = style === "none" || style === "classic" ? "meme" : style;
+        styledWords(ctx, line.text, ls, tf, a);
       }
     }
   } else if (look.endCard) {

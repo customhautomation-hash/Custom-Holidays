@@ -58,6 +58,11 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [musicStart, setMusicStart] = useState(0);
   const [onBeat, setOnBeat] = useState(true);
   const [beatMode, setBeatMode] = useState<BeatMode>("auto");
+  // Words from the song on screen: one line per clip, or timed by tapping along to the music
+  const [lyricsOn, setLyricsOn] = useState(false);
+  const [lyricsText, setLyricsText] = useState("");
+  const [lyricsMode, setLyricsMode] = useState<"clips" | "timed">("clips");
+  const [lyricTimes, setLyricTimes] = useState<number[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
@@ -213,6 +218,22 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const visualCredits = [...new Set(clips.filter(c => c.credit).map(c => c.credit.replace(/^(Photo|Video): /, "")))];
   const creditLine = [visualCredits.length ? `${clips.some(c => c.credit.startsWith("Video")) ? "Footage" : "Photos"}: ${visualCredits.join(", ")}` : "", opt.music && musicCredit ? musicCredit : ""].filter(Boolean).join(" · ");
   const total = usable.reduce((a, c) => a + c.seconds, 0) + (opt.end ? END : 0);
+  const lyricLines = lyricsText.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const lyrics = useMemo(() => {
+    if (!lyricsOn || !lyricLines.length) return undefined;
+    const clipsEnd = usable.reduce((a, c) => a + c.seconds, 0);
+    if (lyricsMode === "timed" && lyricTimes.length) {
+      return lyricTimes.map((st, k) => ({ text: lyricLines[k] || "", start: st, end: Math.min(lyricTimes[k + 1] ?? clipsEnd, clipsEnd) })).filter(l => l.end > l.start);
+    }
+    // one line per clip, in order (title cards, and the first clip while it shows the opening title, are skipped)
+    const out: { text: string; start: number; end: number }[] = []; let at = 0, k = 0;
+    usable.forEach((c, i) => {
+      const titled = i === 0 && opt.title && !!plan?.title;
+      if (!c.card && !titled && k < lyricLines.length) out.push({ text: lyricLines[k++], start: at, end: at + c.seconds });
+      at += c.seconds;
+    });
+    return out;
+  }, [lyricsOn, lyricsText, lyricsMode, opt.title, plan?.title, lyricTimes.join(","), usable.map(c => `${c.seconds}${c.card ? "c" : ""}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalRef = useRef(total); totalRef.current = total;
   const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total };
   // The strongest stretches of the song for this reel's length; "Best part" steps through them
@@ -347,6 +368,19 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
                     : beatMode === "beat" ? "A new clip on every beat (very fast; good for trend reels)." : beatMode === "two" ? "A new clip every 2 beats." : "A new clip every bar (4 beats): calm and cinematic."}</Muted>
                   <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
               </div></Row>}
+              {opt.music && music && <Row t={t} label="Lyrics"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
+                <label className="flex items-center gap-2" style={{ cursor: "pointer" }}><input type="checkbox" checked={lyricsOn} onChange={e => setLyricsOn(e.target.checked)} style={{ accentColor: "#13585B" }} />Show the song's words on screen</label>
+                {lyricsOn && <>
+                  <textarea value={lyricsText} onChange={e => { setLyricsText(e.target.value); }} rows={5} placeholder={"Paste or type the words, one line per line, e.g.\nI've been waiting all year\nfor a moment like this"}
+                    style={{ ...field(t), height: "auto", padding: "10px 12px", lineHeight: 1.5, resize: "vertical", fontFamily: "inherit" }} />
+                  <Mini t={t} label="Timing" value={lyricsMode} options={[["clips", "One line per clip"], ["timed", "Tap along to the song"]]} onChange={v => setLyricsMode(v as any)} />
+                  {lyricsMode === "timed" && <LyricTapper t={t} music={music} start={musicStart} lines={lyricLines} times={lyricTimes} setTimes={setLyricTimes} />}
+                  <Muted>{lyricsMode === "clips" ? `Line 1 shows on clip 1, line 2 on clip 2, and so on (${lyricLines.length} line${lyricLines.length === 1 ? "" : "s"}, ${usable.filter(c => !c.card).length} clips). With Cuts on the beat, each line changes on the beat.`
+                    : "Press Start, then press Next line (or the Space bar) the moment each line is sung. The words then appear exactly then in the reel."}
+                    {" "}They use the Words style under Look (Meme if it's Classic or None) and replace the clips' own text.</Muted>
+                  <Muted>Only use words you're allowed to: your own, or a song you have the rights to.</Muted>
+                </>}
+              </div></Row>}
             </Card>
 
             {plan && (plan.caption || plan.hashtags.length > 0) && (
@@ -359,7 +393,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               </Card>)}
           </div>
 
-          <Preview t={t} active={active} clips={usable} look={look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
+          <Preview t={t} active={active} clips={usable} look={lyrics ? { ...look, lyrics } : look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
         </div>)}
     </div>
   );
@@ -459,6 +493,46 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
       {srcNote && <div style={{ fontSize: 12, color: t.MUTED, background: t.BG, boxShadow: t.IN, borderRadius: 10, padding: "8px 10px" }}>{srcNote}</div>}
     </div>
   );
+}
+
+/** Tap along: plays the song from where the reel starts it; each press stamps when the next line begins. */
+function LyricTapper({ t, music, start, lines, times, setTimes }: { t: T; music: File; start: number; lines: string[]; times: number[]; setTimes: (x: number[]) => void }) {
+  const [on, setOn] = useState(false);
+  const [now, setNow] = useState(0);
+  const ref = useRef<{ a: HTMLAudioElement; url: string; timer: number } | null>(null);
+  const stamps = useRef<number[]>([]);
+  const stop = () => { const r = ref.current; ref.current = null; if (r) { clearInterval(r.timer); r.a.pause(); URL.revokeObjectURL(r.url); } setOn(false); };
+  useEffect(() => stop, []);
+  const go = async () => {
+    stop(); stamps.current = []; setTimes([]);
+    const url = URL.createObjectURL(music); const a = new Audio(url);
+    await new Promise<void>(res => { a.onloadedmetadata = () => res(); a.onerror = () => res(); });
+    a.currentTime = start; a.volume = 0.9;
+    const timer = window.setInterval(() => setNow(a.currentTime - start), 50);
+    ref.current = { a, url, timer }; setOn(true); a.play().catch(stop);
+  };
+  const tap = () => {
+    const r = ref.current; if (!r) return;
+    stamps.current = [...stamps.current, Math.max(0, Math.round((r.a.currentTime - start) * 100) / 100)];
+    setTimes(stamps.current);
+    if (stamps.current.length >= lines.length) stop();
+  };
+  useEffect(() => {
+    if (!on) return;
+    const key = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); tap(); } };
+    window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
+  });
+  const next = lines[times.length];
+  return (
+    <div className="flex flex-col gap-2" style={{ padding: 12, borderRadius: 12, background: t.BG, boxShadow: t.IN }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        {!on ? <Btn onClick={go} disabled={!lines.length} style={{ height: 32 }}><Play size={13} />{times.length ? "Start again" : "Start"}</Btn>
+          : <><Btn kind="primary" onClick={tap} style={{ height: 32 }}>Next line (Space)</Btn><Btn onClick={stop} style={{ height: 32 }}><Square size={13} />Stop</Btn></>}
+        <span style={{ fontSize: 12, color: t.MUTED, fontVariantNumeric: "tabular-nums" }}>{on ? clock(now) : ""} {times.length}/{lines.length} lines timed</span>
+      </div>
+      {on && next && <div style={{ fontSize: 13, color: t.INK }}>Press when you hear: <b>{next}</b></div>}
+      {!on && times.length > 0 && <div style={{ fontSize: 12, color: t.MUTED, lineHeight: 1.6 }}>{times.map((x, k) => <div key={k}><span style={{ fontVariantNumeric: "tabular-nums", color: t.TEAL }}>{clock(x)}</span> · {lines[k]}</div>)}</div>}
+    </div>);
 }
 
 /** Plays the part of the song the reel will use, with the same fade in and fade out. */
@@ -638,7 +712,7 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
     if (!ctx || !L) return;
     if (!player.current) { player.current = new ReelPlayer(ctx, L, look, setTime, audio.current, fit); player.current.seek(0); }
     else player.current.update(L, look, audio.current, fit);
-  }, [fit.start, fit.volume, fit.loop, fit.fadeOut, L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.text?.position, look.text?.font, look.text?.size, look.text?.style, look.grade, look.frame, look.fade, look.transition, music]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fit.start, fit.volume, fit.loop, fit.fadeOut, L, look.title, look.showTitle, look.showText, look.showLogo, look.endCard, look.endLine, look.endSub, look.text?.position, look.text?.font, look.text?.size, look.text?.style, look.grade, look.frame, look.fade, look.transition, JSON.stringify(look.lyrics || null), music]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { player.current?.pause(); }, []);
   // Stop the preview (and its music) when you leave the Reel tab or the page
   useEffect(() => { if ((!active || !pageVisible) && player.current?.playing) { player.current.pause(); setPlaying(false); } }, [active, pageVisible]);

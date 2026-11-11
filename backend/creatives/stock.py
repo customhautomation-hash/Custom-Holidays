@@ -205,7 +205,8 @@ def _look_and_rank(cands: list, scene: str, kind: str) -> tuple:
               f"Here are {len(keep)} candidates (image 1 to {len(keep)}; for clips this is one frame).\n"
               "Score each 0-10 for how well it fits that exact shot. The MAIN SUBJECT must be right first of all: if the shot "
               "is about a car, a coffee, a pool or a person doing something, a picture of scenery or a skyline scores 0-2 even "
-              "if it's the right city. Then: the right time of day (night vs day), the same mood and style, and how good it "
+              "if it's the right city. Prefer OUTDOOR shots: an indoor shot scores at most 4 unless the shot we need is clearly "
+              "indoors (a hotel room, spa, restaurant, mall, temple interior). Then: the right time of day (night vs day), the same mood and style, and how good it "
               "would look in a premium reel (sharp, well composed, no watermark or text, no awkward posing). "
               'Return ONLY JSON: {"scores": [n1, n2, ...]} in the same order.')
     try:

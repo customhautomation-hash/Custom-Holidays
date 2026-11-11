@@ -201,6 +201,10 @@ STEP 2. Edit it like a professional:
   views", "Amazing place"). Never repeat the title. Max 8 words, no emojis, no hashtags.
 - TIMING: calm reels 3-5 s per scene, lively 2-3 s, fast 0.8-2 s, single scenery shots 8-30 s, cards 1.5-2.5 s.
   Scenes with more text get more time.
+- OUTDOORS FIRST: travel reels sell the place, so choose outdoor shots (landscapes, streets, skylines, beaches,
+  water, landmarks, terraces, pools under the sky). Use an indoor shot ONLY when the scene is truly about an indoor
+  thing (a hotel suite, a spa, a restaurant table, a temple interior, a shopping mall) and say "indoor" nowhere else.
+  Put "outdoor" or a sky/street/view word in the photo_query when a place could be shown inside or outside.
 - ONE SHOT PER SCENE: never ask for split screens, collages, side-by-side or before/after images. For a
   comparison ("them vs you", "expectation vs reality") show each side as its own scene, one after another.
 - TEXT THAT STAYS: to keep the same words on screen over several clips, give those scenes exactly the
