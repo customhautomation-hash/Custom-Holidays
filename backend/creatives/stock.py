@@ -147,15 +147,73 @@ _rank_cache: dict = {}          # (query, kind, scene) -> (time, ordered ids): S
 _rank_lock = _th.Lock()
 
 
-def _thumb(url: str):
+_thumb_bytes: dict = {}      # small cache of preview frames (url -> bytes), so a frame is fetched once
+
+
+def _thumb_raw(url: str):
+    if url in _thumb_bytes:
+        return _thumb_bytes[url]
     try:
         r = requests.get(url, headers=UA, timeout=8)
         r.raise_for_status()
-        if len(r.content) > 600_000:
-            return None
-        return (r.headers.get("content-type", "image/jpeg").split(";")[0], _b64.b64encode(r.content).decode())
+        data = r.content if len(r.content) <= 600_000 else None
+    except Exception:
+        data = None
+    if len(_thumb_bytes) > 400:
+        _thumb_bytes.clear()
+    _thumb_bytes[url] = data
+    return data
+
+
+def _thumb(url: str):
+    data = _thumb_raw(url)
+    return ("image/jpeg", _b64.b64encode(data).decode()) if data else None
+
+
+# ── Day or night? Measured from the picture itself (no AI needed, always works) ──
+
+_NIGHT = _re.compile(r"\b(night|nighttime|night-time|neon|after dark|midnight|moon|moonlit|fireworks?|light trails?|"
+                     r"illuminated|lit up|nightlife|starry|stars|city lights|lanterns? at night)\b", _re.I)
+_DAY = _re.compile(r"\b(daytime|by day|during the day|morning|sunny|noon|midday|blue sky|sunlit|bright day)\b", _re.I)
+
+
+def _wants(text: str) -> str:
+    """'night', 'day' or '' from what the scene describes."""
+    n, d = bool(_NIGHT.search(text or "")), bool(_DAY.search(text or ""))
+    return "night" if n and not d else "day" if d and not n else ""
+
+
+def _darkness(url: str):
+    """How dark the frame is: the share of the picture that is dark (0 = bright day, 1 = black night)."""
+    data = _thumb_raw(url)
+    if not data:
+        return None
+    try:
+        from PIL import Image
+        import io
+        im = Image.open(io.BytesIO(data)).convert("L").resize((64, 64))
+        px = list(im.getdata())
+        return sum(1 for v in px if v < 70) / len(px)
     except Exception:
         return None
+
+
+def _rank_by_light(cands: list, want: str) -> None:
+    """Adds a day/night bonus or penalty to each candidate's score, from its preview frame."""
+    todo = [c for c in cands if c.get("thumb") and "dark" not in c]
+    with _Pool(10) as pool:
+        for c, d in zip(todo, pool.map(lambda c: _darkness(c["thumb"]), todo)):
+            c["dark"] = d
+    for c in cands:
+        d = c.get("dark")
+        if d is None:
+            continue
+        night_like = d >= 0.5            # most of the frame is dark: a night shot
+        day_like = d <= 0.2
+        if want == "night":
+            c["score"] += 4 if night_like else (-1 if not day_like else -5)
+        elif want == "day":
+            c["score"] += 2 if day_like else (-1 if not night_like else -5)
 
 
 _vision_off_until = 0.0
@@ -279,6 +337,16 @@ def find_stock(query: str, kind: str = "photo", pick: int = 0, alt: str = "", ex
             raise Exception("Real video clips need a free Pexels key (PEXELS_API_KEY on Render)")
         raise Exception("No match found for this scene")
     pool.sort(key=lambda it: -it["score"])
+    # Day or night: measure how dark each of the best candidates really is, and if the scene is at night and
+    # hardly any are dark, search again with "night" added
+    want = _wants(f"{query} {scene}")
+    if want and kind in ("video", "photo"):
+        _rank_by_light(pool[:24], want)
+        if want == "night" and sum(1 for c in pool[:24] if (c.get("dark") or 0) >= 0.5) < 3 and "night" not in query.lower():
+            search(f"{query} night")
+            pool.sort(key=lambda it: -it["score"])
+            _rank_by_light(pool[:30], want)
+        pool.sort(key=lambda it: -it["score"])
     # Look at the best few before choosing, so the clip really shows what the scene needs.
     # If none of them fits, look at the next few (and the backup searches). The order is remembered,
     # so Swap clip moves to the next-best match, not a random one.

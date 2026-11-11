@@ -265,6 +265,8 @@ When the scene is about a THING or an ACTIVITY (a car, a coffee, a yacht breakfa
 names that subject first and leaves the city out if the city would pull in skyline shots: "Rolls-Royce
 chauffeur", "luxury car interior", "yacht breakfast table", "infinity pool skyline". Only use the city name
 when the scene is the city itself.
+If the scene happens at night (or the request says night, neon, after dark), the photo_query MUST contain
+"night" (e.g. "Dubai Marina night", "Sheikh Zayed Road night traffic"), and image_prompt must say night.
 
 Return ONLY a valid JSON object. No markdown, no explanation.
 
