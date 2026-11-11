@@ -8,7 +8,8 @@
  *                  finishes exactly when the reel ends (over the end card), so it never stops abruptly
  */
 export type TrackInfo = { duration: number; bpm: number; beat: number; beats: number[]; loud: Float32Array; hop: number; onset?: Float32Array };
-export type MusicFit = { start: number; volume: number; fadeIn: number; fadeOut: number; loop: boolean };
+/** length: if set, the music stops (fading out) this many seconds into the reel, before the reel ends */
+export type MusicFit = { start: number; volume: number; fadeIn: number; fadeOut: number; loop: boolean; length?: number };
 
 /** Reads the beat and loudness of a decoded track. Takes a fraction of a second. */
 export function analyseTrack(buf: AudioBuffer): TrackInfo {
@@ -170,11 +171,13 @@ export function fitToBeat(seconds: number[], info: TrackInfo, start: number, mod
 
 /** Volume at reel time t: fade in, then an equal-power fade out that reaches silence exactly at the end. */
 export function gainAt(t: number, total: number, fit: MusicFit): number {
+  if (fit.length && fit.length > 1) total = Math.min(total, fit.length);
   if (t < 0 || t >= total) return 0;
   let g = fit.volume;
   if (t < fit.fadeIn) g *= Math.sin((t / fit.fadeIn) * Math.PI / 2);
   const left = total - t;
-  if (left < fit.fadeOut) g *= Math.sin((left / fit.fadeOut) * Math.PI / 2);
+  const fo = Math.min(fit.fadeOut, total * 0.4);
+  if (left < fo) g *= Math.sin((left / fo) * Math.PI / 2);
   return g;
 }
 

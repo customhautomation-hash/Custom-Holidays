@@ -5,7 +5,7 @@
  * 3. Text, title, logo, end card and music are switched on or off with buttons, previewed live,
  *    and the reel is recorded in the browser as an MP4 (1080×1920).
  */
-import { CSSProperties, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, ReactNode, PointerEvent as RPointerEvent, MouseEvent as RMouseEvent, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PageVisible } from "@/components/AppGuards";
 import { Maximize2, Minimize2, Upload, RefreshCw, Clapperboard, Play, Pause, Download, Loader2, Square, ArrowUp, ArrowDown, X, Copy, Check, Music, Type, Image as ImageIcon, Film, Captions, Stamp, LayoutTemplate } from "lucide-react";
 import { Card, Btn, Muted, T } from "@/components/ch/kit";
@@ -56,6 +56,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const [volume, setVolume] = useState(0.8);
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const [musicStart, setMusicStart] = useState(0);
+  const [musicLen, setMusicLen] = useState(0);      // 0 = the music plays for the whole reel
   const [onBeat, setOnBeat] = useState(true);
   const [beatMode, setBeatMode] = useState<BeatMode>("auto");
   // Words from the song on screen: one line per clip, or timed by tapping along to the music
@@ -235,7 +236,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
     return out;
   }, [lyricsOn, lyricsText, lyricsMode, opt.title, plan?.title, lyricTimes.join(","), usable.map(c => `${c.seconds}${c.card ? "c" : ""}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalRef = useRef(total); totalRef.current = total;
-  const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total };
+  const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total,
+    length: musicLen && musicLen < total - 0.3 ? musicLen : undefined };
   // The strongest stretches of the song for this reel's length; "Best part" steps through them
   const reelLen = usable.length ? total : seconds;          // before the reel is planned, use the length chosen
   const parts = useMemo(() => (track ? bestParts(track, Math.max(10, reelLen), 3) : []), [track, Math.round(reelLen)]);
@@ -401,7 +403,11 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               </Card>)}
           </div>
 
-          <Preview t={t} active={active} clips={usable} look={lyrics ? { ...look, lyrics } : look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
+          <div className="flex flex-col gap-6 xl:sticky xl:top-4">
+            <Preview t={t} active={active} clips={usable} look={lyrics ? { ...look, lyrics } : look} music={opt.music ? music : null} fit={fit} name={(brief || board.dest || "reel").slice(0, 40)} />
+            {opt.music && music && track && <SongEditor t={t} track={track} music={music} start={musicStart} setStart={setMusicStart} reelLen={total}
+              len={musicLen && musicLen < total ? musicLen : total} setLen={v => setMusicLen(v >= total - 0.3 ? 0 : v)} fit={fit} parts={parts} partNo={partNo} />}
+          </div>
         </div>)}
     </div>
   );
@@ -501,6 +507,80 @@ function MusicPicker({ t, tags, energy, query, mood, seconds, music, credit, onP
       {srcNote && <div style={{ fontSize: 12, color: t.MUTED, background: t.BG, boxShadow: t.IN, borderRadius: 10, padding: "8px 10px" }}>{srcNote}</div>}
     </div>
   );
+}
+
+/**
+ * Song editor, like Instagram's: the whole song as a waveform; the highlighted window is the part the reel
+ * uses. Drag the window to choose where the song starts, drag its right edge to end the music earlier.
+ * The start snaps onto a beat so the cuts stay on the beat.
+ */
+function SongEditor({ t, track, music, start, setStart, reelLen, len, setLen, fit, parts, partNo }: { t: T; track: TrackInfo; music: File; start: number; setStart: (v: number) => void;
+  reelLen: number; len: number; setLen: (v: number) => void; fit: MusicFit; parts: number[]; partNo: number }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [drag, setDrag] = useState<null | { kind: "move" | "end"; x0: number; s0: number; l0: number }>(null);
+  const dur = track.duration;
+  const BARS = 120;
+  const bars = useMemo(() => {
+    const out: number[] = []; const per = track.loud.length / BARS; let mx = 0;
+    for (let i = 0; i < BARS; i++) { let s = 0, n = 0; for (let j = Math.floor(i * per); j < Math.floor((i + 1) * per); j++) { s += track.loud[j]; n++; } out.push(n ? s / n : 0); mx = Math.max(mx, out[i]); }
+    return out.map(v => (mx ? v / mx : 0));
+  }, [track]);
+  const snap = (v: number) => {
+    let best = v, d = 0.25;
+    for (const b of track.beats) { const dd = Math.abs(b - v); if (dd < d) { d = dd; best = b; } if (b > v + 0.3) break; }
+    return Math.round(best * 100) / 100;
+  };
+  const onDown = (kind: "move" | "end") => (e: RPointerEvent) => {
+    e.preventDefault(); e.stopPropagation(); (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDrag({ kind, x0: e.clientX, s0: start, l0: len });
+  };
+  const onMove = (e: RPointerEvent) => {
+    if (!drag || !box.current) return;
+    const secs = ((e.clientX - drag.x0) / box.current.clientWidth) * dur;
+    if (drag.kind === "move") setStart(snap(Math.max(0, Math.min(dur - Math.min(len, dur), drag.s0 + secs))));
+    else setLen(Math.max(3, Math.min(reelLen, Math.round((drag.l0 + secs) * 10) / 10)));
+  };
+  const onUp = () => setDrag(null);
+  // clicking the waveform outside the window moves the window there
+  const jump = (e: RMouseEvent) => {
+    if (!box.current) return;
+    const r = box.current.getBoundingClientRect();
+    const at = ((e.clientX - r.left) / r.width) * dur - len / 2;
+    setStart(snap(Math.max(0, Math.min(dur - Math.min(len, dur), at))));
+  };
+  const left = (start / dur) * 100, width = (Math.min(len, dur - start) / dur) * 100;
+  const mmss = (v: number) => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, "0")}`;
+  return (
+    <Card pad="16px 18px">
+      <div className="flex items-baseline justify-between gap-2" style={{ marginBottom: 10 }}>
+        <b style={{ fontSize: 14 }}>Song</b>
+        <span style={{ fontSize: 11.5, color: t.MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{music.name.replace(/\.[a-z0-9]+$/i, "")}</span>
+      </div>
+      <div ref={box} onClick={jump} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        style={{ position: "relative", height: 64, borderRadius: 10, background: t.BG, boxShadow: t.IN, cursor: "pointer", touchAction: "none", userSelect: "none", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: "8px 6px", display: "flex", alignItems: "center", gap: 1 }}>
+          {bars.map((v, i) => {
+            const at = (i + 0.5) / BARS * dur, on = at >= start && at <= start + len;
+            return <div key={i} style={{ flex: 1, height: `${Math.max(6, v * 100)}%`, borderRadius: 2, background: on ? t.TEAL : t.FAINT, opacity: on ? 1 : 0.45 }} />;
+          })}
+        </div>
+        <div onPointerDown={onDown("move")} onClick={e => e.stopPropagation()} title="Drag to choose where the song starts"
+          style={{ position: "absolute", top: 2, bottom: 2, left: `${left}%`, width: `${width}%`, minWidth: 14, borderRadius: 9, border: `2px solid ${t.TEAL}`,
+            background: "rgba(95,179,174,.12)", cursor: drag?.kind === "move" ? "grabbing" : "grab", boxSizing: "border-box" }}>
+          <div onPointerDown={onDown("end")} title="Drag to end the music earlier"
+            style={{ position: "absolute", right: -2, top: -2, bottom: -2, width: 12, borderRadius: "0 9px 9px 0", background: t.TEAL, cursor: "ew-resize" }} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between" style={{ fontSize: 11.5, color: t.MUTED, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>
+        <span>0:00</span><span style={{ color: t.INK, fontWeight: 600 }}>{mmss(start)} → {mmss(start + Math.min(len, dur - start))}</span><span>{mmss(dur)}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 10 }}>
+        <Btn onClick={() => parts.length && setStart(parts[(partNo + 1) % parts.length])} style={{ height: 30 }}>{partNo < 0 ? "Best part" : `Next best (${partNo + 1}/${parts.length})`}</Btn>
+        <ListenPart t={t} music={music} start={start} seconds={len} fit={{ ...fit, length: undefined }} />
+        {len < reelLen - 0.3 && <Btn onClick={() => setLen(reelLen)} style={{ height: 30 }}>Play to the end</Btn>}
+      </div>
+      <div style={{ marginTop: 8 }}><Muted>{len < reelLen - 0.3 ? `The music plays for ${len.toFixed(1)} s and fades out; the reel is ${reelLen.toFixed(1)} s.` : "Drag the window to pick the part of the song. Drag its right edge to end the music earlier."}</Muted></div>
+    </Card>);
 }
 
 /** Tap along: plays the song from where the reel starts it; each press stamps when the next line begins. */
@@ -762,7 +842,7 @@ function Preview({ t, active, clips, look, music, fit, name }: { t: T; active: b
   const ctrl: CSSProperties = { width: 40, height: 40, borderRadius: 99, border: "none", background: "rgba(0,0,0,.55)", color: "#fff", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
 
   return (
-    <Card pad="18px" className="xl:sticky xl:top-4">
+    <Card pad="18px">
       <div ref={frameBox} style={full
         ? { position: "relative", width: "100vw", height: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }
         : { position: "relative", width: "100%", maxWidth: 340, margin: "0 auto", aspectRatio: `${W} / ${H}`, borderRadius: 16, overflow: "hidden", background: "#0C2C32", boxShadow: t.IN }}>
