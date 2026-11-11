@@ -237,8 +237,33 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
   const totalRef = useRef(total); totalRef.current = total;
   const fit: MusicFit = { start: musicStart, volume, fadeIn: musicStart > 0 ? 0.25 : 0.6, fadeOut: opt.end ? 3.2 : 2.5, loop: !!track && track.duration - musicStart < total };
   // The strongest stretches of the song for this reel's length; "Best part" steps through them
-  const parts = useMemo(() => (track ? bestParts(track, Math.max(10, total), 3) : []), [track, Math.round(total)]);
+  const reelLen = usable.length ? total : seconds;          // before the reel is planned, use the length chosen
+  const parts = useMemo(() => (track ? bestParts(track, Math.max(10, reelLen), 3) : []), [track, Math.round(reelLen)]);
   const partNo = parts.findIndex(p => Math.abs(p - musicStart) < 0.05);
+  // The song's timing controls: shown under the upload in the first card, and in the Music card
+  const timingBody = (
+    <>
+                {!track ? <Muted>Reading the beat…</Muted> : <>
+                  <div style={{ color: t.MUTED }}>About {track.bpm} beats a minute · {Math.floor(track.duration / 60)}:{String(Math.round(track.duration % 60)).padStart(2, "0")} long{fit.loop ? " · repeats to fill the reel" : ""}</div>
+                  <label className="flex items-center gap-3">Music starts at
+                    <input type="range" min={0} max={Math.max(0, Math.floor(track.duration - 2))} step={0.1} value={musicStart} onChange={e => setMusicStart(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} />
+                    <span style={{ fontVariantNumeric: "tabular-nums", width: 36 }}>{Math.floor(musicStart / 60)}:{String(Math.floor(musicStart % 60)).padStart(2, "0")}</span>
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Btn onClick={() => parts.length && setMusicStart(parts[(partNo + 1) % parts.length])} style={{ height: 30 }}>
+                      {partNo < 0 ? "Best part" : parts.length > 1 ? `Next best part (${partNo + 1} of ${parts.length})` : "Best part"}</Btn>
+                    {music && <ListenPart t={t} music={music} start={musicStart} seconds={reelLen} fit={fit} />}
+                    {partNo >= 0 && <Muted>{partNo === 0 ? "The strongest part of the song" : `Option ${partNo + 1}`}</Muted>}
+                  </div>
+                  <Muted>Best part looks at how loud and full the song is moment by moment, and picks the stretch the length of your reel that stays strongest the whole way (usually the chorus or the drop), starting on a beat where the song lifts. Press it again for the next option, and Listen to hear exactly what the reel will use.</Muted>
+                  <Mini t={t} label="Cuts" value={onBeat ? beatMode : "off"} options={[["auto", "On the beat (auto)"], ["beat", "Every beat"], ["two", "Every 2 beats"], ["bar", "Every bar"], ["off", "Off"]]}
+                    onChange={v => { if (v === "off") setOnBeat(false); else { setOnBeat(true); setBeatMode(v as BeatMode); } }} />
+                  <Muted>{!onBeat ? "Clips keep their own lengths." : beatMode === "auto"
+                    ? "Every clip changes exactly on a beat of the song: quick clips flick on each hit, longer ones land on the start of a bar. Works for uploaded tracks too."
+                    : beatMode === "beat" ? "A new clip on every beat (very fast; good for trend reels)." : beatMode === "two" ? "A new clip every 2 beats." : "A new clip every bar (4 beats): calm and cinematic."}</Muted>
+                  <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -269,7 +294,8 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
             {opt.music && <div style={{ marginTop: 12 }}>
               <MusicDrop t={t} music={music} onFile={f => { setMusic(f); setMusicCredit(""); }} onClear={() => { setMusic(null); setMusicCredit(""); }}
                 label="Drop your music here, or click to choose a file" />
-              <div style={{ marginTop: 6 }}><Muted>{music ? "The clips will change on the beats of this track." : "Optional. Or leave it empty and pick a free track after the reel is planned."}</Muted></div>
+              {music ? <div className="flex flex-col gap-2" style={{ marginTop: 10, fontSize: 12.5 }}>{timingBody}</div>
+                : <div style={{ marginTop: 6 }}><Muted>Optional. Or leave it empty and pick a free track after the reel is planned.</Muted></div>}
             </div>}
             <div style={{ marginTop: 10 }}><Muted>{opt.moving ? "Moving clips take 3 to 8 minutes each on the main PC. Pictures appear first so you can preview straight away." : "Pictures get a slow, cinematic zoom. Turn on Moving clips for real motion when the video studio is online."}</Muted></div>
           </div>
@@ -348,25 +374,7 @@ export default function ReelMaker({ t, videoOn, board, active = true }: { t: T; 
               {opt.music && <Row t={t} label="Track"><MusicPicker t={t} tags={plan?.music_tags || []} energy={plan?.music_energy || (pace === "fast" ? "high" : pace === "slow" ? "calm" : "medium")} query={plan?.music_tags?.length ? plan.music_tags.join(" ") : plan?.music_query || plan?.music_mood || "cinematic"} mood={plan?.music_mood || ""} seconds={Math.ceil(total)} music={music} credit={musicCredit}
                 onPick={(f, credit) => { setMusic(f); setMusicCredit(credit); }} volume={volume} setVolume={setVolume} /></Row>}
               {opt.music && music && <Row t={t} label="Timing"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
-                {!track ? <Muted>Reading the beat…</Muted> : <>
-                  <div style={{ color: t.MUTED }}>About {track.bpm} beats a minute · {Math.floor(track.duration / 60)}:{String(Math.round(track.duration % 60)).padStart(2, "0")} long{fit.loop ? " · repeats to fill the reel" : ""}</div>
-                  <label className="flex items-center gap-3">Music starts at
-                    <input type="range" min={0} max={Math.max(0, Math.floor(track.duration - 2))} step={0.1} value={musicStart} onChange={e => setMusicStart(Number(e.target.value))} style={{ flex: 1, accentColor: "#13585B" }} />
-                    <span style={{ fontVariantNumeric: "tabular-nums", width: 36 }}>{Math.floor(musicStart / 60)}:{String(Math.floor(musicStart % 60)).padStart(2, "0")}</span>
-                  </label>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Btn onClick={() => parts.length && setMusicStart(parts[(partNo + 1) % parts.length])} style={{ height: 30 }}>
-                      {partNo < 0 ? "Best part" : parts.length > 1 ? `Next best part (${partNo + 1} of ${parts.length})` : "Best part"}</Btn>
-                    <ListenPart t={t} music={music} start={musicStart} seconds={total} fit={fit} />
-                    {partNo >= 0 && <Muted>{partNo === 0 ? "The strongest part of the song" : `Option ${partNo + 1}`}</Muted>}
-                  </div>
-                  <Muted>Best part looks at how loud and full the song is moment by moment, and picks the stretch the length of your reel that stays strongest the whole way (usually the chorus or the drop), starting on a beat where the song lifts. Press it again for the next option, and Listen to hear exactly what the reel will use.</Muted>
-                  <Mini t={t} label="Cuts" value={onBeat ? beatMode : "off"} options={[["auto", "On the beat (auto)"], ["beat", "Every beat"], ["two", "Every 2 beats"], ["bar", "Every bar"], ["off", "Off"]]}
-                    onChange={v => { if (v === "off") setOnBeat(false); else { setOnBeat(true); setBeatMode(v as BeatMode); } }} />
-                  <Muted>{!onBeat ? "Clips keep their own lengths." : beatMode === "auto"
-                    ? "Every clip changes exactly on a beat of the song: quick clips flick on each hit, longer ones land on the start of a bar. Works for uploaded tracks too."
-                    : beatMode === "beat" ? "A new clip on every beat (very fast; good for trend reels)." : beatMode === "two" ? "A new clip every 2 beats." : "A new clip every bar (4 beats): calm and cinematic."}</Muted>
-                  <Muted>The music fades in, then fades out smoothly over the end card and finishes exactly when the reel ends.</Muted></>}
+                {timingBody}
               </div></Row>}
               {opt.music && music && <Row t={t} label="Lyrics"><div className="flex flex-col gap-2 w-full" style={{ fontSize: 12.5 }}>
                 <label className="flex items-center gap-2" style={{ cursor: "pointer" }}><input type="checkbox" checked={lyricsOn} onChange={e => setLyricsOn(e.target.checked)} style={{ accentColor: "#13585B" }} />Show the song's words on screen</label>
